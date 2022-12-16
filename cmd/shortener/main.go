@@ -6,8 +6,8 @@ import (
 	"strconv"
 )
 
-var baseUrl map[string]string
-var lastId int
+var baseURL map[string]string
+var lastID int
 
 func Shortener(w http.ResponseWriter, r *http.Request) {
 	// Обработка метода Post
@@ -17,21 +17,21 @@ func Shortener(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 			return
 		}
-		lastId++
-		shortKey := strconv.Itoa(lastId)
-		baseUrl[shortKey] = string(body)
+		lastID++
+		shortKey := strconv.Itoa(lastID)
+		baseURL[shortKey] = string(body)
 		// создание короткой ссылки из хоста и shortKey
-		shortUrl := "http://" + r.Host + "/" + shortKey
+		shortURL := "http://" + r.Host + "/" + shortKey
 		w.WriteHeader(201)
-		w.Write([]byte(shortUrl))
+		w.Write([]byte(shortURL))
 	}
 
 	// Обработка метода Get
 	if r.Method == http.MethodGet {
 		shortKey := r.URL.Path[1:]
-		fullUrl, ok := baseUrl[shortKey]
+		fullURL, ok := baseURL[shortKey]
 		if ok {
-			w.Header().Set("Location", fullUrl)
+			w.Header().Set("Location", fullURL)
 			w.WriteHeader(307)
 		} else {
 			w.WriteHeader(400)
@@ -41,7 +41,7 @@ func Shortener(w http.ResponseWriter, r *http.Request) {
 }
 
 func init() {
-	baseUrl = make(map[string]string)
+	baseURL = make(map[string]string)
 }
 
 func main() {
