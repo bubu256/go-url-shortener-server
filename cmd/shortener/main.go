@@ -21,7 +21,7 @@ func Shortener(w http.ResponseWriter, r *http.Request) {
 		shortKey := strconv.Itoa(lastId)
 		baseUrl[shortKey] = string(body)
 		// создание короткой ссылки из хоста и shortKey
-		shortUrl := r.Host + "/" + shortKey
+		shortUrl := "http://" + r.Host + "/" + shortKey
 		w.WriteHeader(201)
 		w.Write([]byte(shortUrl))
 	}
