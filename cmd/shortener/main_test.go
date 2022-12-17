@@ -21,7 +21,7 @@ func TestShortener(t *testing.T) {
 	tests := []struct {
 		name    string
 		request *http.Request
-		mapUrl  map[string]string
+		mapURL  map[string]string
 		want    want
 	}{
 		{
@@ -32,21 +32,21 @@ func TestShortener(t *testing.T) {
 		{
 			name:    "redirect",
 			request: httptest.NewRequest(http.MethodGet, "/1", nil),
-			mapUrl:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
+			mapURL:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
 			want:    want{code: 307, HeaderLocation: "https://practicum.yandex.ru/catalog/"},
 		},
 		{
-			name:    "redirect",
+			name:    "code 400",
 			request: httptest.NewRequest(http.MethodGet, "/2", nil),
-			mapUrl:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
+			mapURL:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
 			want:    want{code: 400},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.mapUrl != nil {
+			if tt.mapURL != nil {
 				// затеняем baseURL для теста
-				baseURL := tt.mapUrl
+				baseURL := tt.mapURL
 				_ = baseURL
 			}
 			w := httptest.NewRecorder()
