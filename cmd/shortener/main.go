@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"log"
 	"net/http"
 	"strconv"
 )
@@ -12,6 +13,7 @@ var lastID int
 func Shortener(w http.ResponseWriter, r *http.Request) {
 	// Обработка метода Post
 	if r.Method == http.MethodPost {
+		defer r.Body.Close()
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
@@ -46,5 +48,5 @@ func init() {
 
 func main() {
 	http.HandleFunc("/", Shortener)
-	http.ListenAndServe(":8080", nil)
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }
