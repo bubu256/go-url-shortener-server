@@ -42,8 +42,7 @@ func TestHandlerURLtoShort(t *testing.T) {
 			body, err := io.ReadAll(res.Body)
 			res.Body.Close()
 			require.NoError(t, err)
-			isValidUrl := IsURL(string(body))
-			assert.True(t, isValidUrl)
+			assert.True(t, IsURL(string(body)))
 		})
 	}
 }
