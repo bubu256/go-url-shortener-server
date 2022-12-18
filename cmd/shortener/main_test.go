@@ -5,59 +5,79 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestShortener(t *testing.T) {
-	type want struct {
-		code              int
-		HeaderContentType string
-		response          string
-		HeaderLocation    string
-	}
+func IsUrl(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
+}
 
-	tests := []struct {
-		name    string
-		request *http.Request
-		mapURL  map[string]string
-		want    want
+func TestHandlerURLtoShort(t *testing.T) {
+	tt := []struct {
+		name     string
+		url      string
+		body     string
+		wantCode int
+		wantBody string
 	}{
 		{
-			name:    "got short link",
-			request: httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString("https://practicum.yandex.ru/catalog/")),
-			want:    want{code: 201, response: "http://example.com/1"},
-		},
-		{
-			name:    "redirect",
-			request: httptest.NewRequest(http.MethodGet, "/1", nil),
-			mapURL:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
-			want:    want{code: 307, HeaderLocation: "https://practicum.yandex.ru/catalog/"},
-		},
-		{
-			name:    "code 400",
-			request: httptest.NewRequest(http.MethodGet, "/2", nil),
-			mapURL:  map[string]string{"1": "https://practicum.yandex.ru/catalog/"},
-			want:    want{code: 400},
+			name:     "got valid shortlink",
+			url:      "/",
+			body:     "https://translate.google.ru/?hl=ru&tab=wT&sl=ru&tl=en&text=%D0%AD%D1%82%D0%BE%20%D1%82%D0%B5%D1%81%D1%82%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%20%D0%BF%D0%BE%D0%BB%D1%83%D1%87%D0%B5%D0%BD%D0%B8%D1%8F%20%D0%BA%D0%BE%D1%80%D0%BE%D1%82%D0%BA%D0%BE%D0%B9%20%D1%81%D1%81%D1%8B%D0%BB%D0%BA%D0%B8&op=translate",
+			wantCode: 201,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.mapURL != nil {
-				// затеняем baseURL для теста
-				baseURL := tt.mapURL
-				_ = baseURL
-			}
+	for _, d := range tt {
+		t.Run(d.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			http.HandlerFunc(Shortener).ServeHTTP(w, tt.request)
+			r := httptest.NewRequest("POST", d.url, bytes.NewBufferString(d.body))
+			http.HandlerFunc(HandlerURLtoShort).ServeHTTP(w, r)
 			res := w.Result()
-			assert.Equal(t, tt.want.code, res.StatusCode)
-			assert.Equal(t, tt.want.HeaderContentType, res.Header.Get("Content-Type"))
+			assert.Equal(t, d.wantCode, res.StatusCode)
 			body, err := io.ReadAll(res.Body)
 			res.Body.Close()
-			assert.NoError(t, err)
-			assert.Equal(t, tt.want.response, string(body))
+			require.NoError(t, err)
+			isValidUrl := IsUrl(string(body))
+			assert.True(t, isValidUrl)
+		})
+	}
+}
+
+func TestHandlerShortToFullURL(t *testing.T) {
+	longURL := "https://translate.google.ru/?hl=ru&tab=wT&sl=ru&tl=en&text=%D0%AD%D1%82%D0%BE%20%D1%82%D0%B5%D1%81%D1%82%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5%20%D0%BF%D0%BE%D0%BB%D1%83%D1%87%D0%B5%D0%BD%D0%B8%D1%8F%20%D0%BA%D0%BE%D1%80%D0%BE%D1%82%D0%BA%D0%BE%D0%B9%20%D1%81%D1%81%D1%8B%D0%BB%D0%BA%D0%B8&op=translate"
+	baseURL = map[string]string{"1": longURL}
+
+	tt := []struct {
+		name         string
+		url          string
+		wantCode     int
+		wantLocation string
+	}{
+		{
+			name:         "redirect to base url",
+			url:          "/1",
+			wantCode:     307,
+			wantLocation: longURL,
+		},
+		{
+			name:     "status code 400",
+			url:      "/0",
+			wantCode: 400,
+		},
+	}
+	for _, d := range tt {
+		t.Run(d.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", d.url, nil)
+			http.HandlerFunc(HandlerShortToFullURL).ServeHTTP(w, r)
+			res := w.Result()
+			assert.Equal(t, d.wantCode, res.StatusCode)
+			assert.Equal(t, d.wantLocation, res.Header.Get("Location"))
 		})
 	}
 }
