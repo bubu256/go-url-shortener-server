@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func IsUrl(str string) bool {
+func IsURL(str string) bool {
 	u, err := url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
@@ -42,7 +42,7 @@ func TestHandlerURLtoShort(t *testing.T) {
 			body, err := io.ReadAll(res.Body)
 			res.Body.Close()
 			require.NoError(t, err)
-			isValidUrl := IsUrl(string(body))
+			isValidUrl := IsURL(string(body))
 			assert.True(t, isValidUrl)
 		})
 	}
@@ -76,6 +76,7 @@ func TestHandlerShortToFullURL(t *testing.T) {
 			r := httptest.NewRequest("GET", d.url, nil)
 			http.HandlerFunc(HandlerShortToFullURL).ServeHTTP(w, r)
 			res := w.Result()
+			res.Body.Close()
 			assert.Equal(t, d.wantCode, res.StatusCode)
 			assert.Equal(t, d.wantLocation, res.Header.Get("Location"))
 		})
