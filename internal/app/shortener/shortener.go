@@ -23,7 +23,7 @@ func New(db *storage.Storage) *Shortener {
 
 // создает и возвращает новый ключ
 func (s *Shortener) getNewKey() string {
-	var current int = <-s.lastID
+	var current = <-s.lastID
 	current++
 	s.lastID <- current
 	return strconv.Itoa(current)
