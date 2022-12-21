@@ -26,8 +26,6 @@ func (s *Storage) GetURL(key string) (string, bool) {
 
 	fullURL, ok := s.data.Load(key)
 	if !ok {
-		//err := fmt.Errorf("'%v' отсутствует в хранилище;", key)
-		// fmt.Println(err)
 		return "", ok
 	}
 
