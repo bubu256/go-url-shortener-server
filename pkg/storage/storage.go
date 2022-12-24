@@ -4,15 +4,20 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/bubu256/go-url-shortener-server/pkg/config"
+	"github.com/bubu256/go-url-shortener-server/config"
 )
 
-type Storage struct {
+type Storage interface {
+	GetURL(string) (string, bool)
+	SetNewURL(string, string) error
+}
+
+type MapDB struct {
 	data sync.Map
 }
 
-func New(cfgDB config.CfgDataBase) *Storage {
-	NewStorage := Storage{}
+func NewMapDB(cfgDB config.CfgDataBase) *MapDB {
+	NewStorage := MapDB{}
 	if cfgDB.InitialData != nil {
 		for k, v := range cfgDB.InitialData {
 			NewStorage.data.Store(k, v)
@@ -22,7 +27,7 @@ func New(cfgDB config.CfgDataBase) *Storage {
 }
 
 // возвращает полный URL по ключу
-func (s *Storage) GetURL(key string) (string, bool) {
+func (s *MapDB) GetURL(key string) (string, bool) {
 
 	fullURL, ok := s.data.Load(key)
 	if !ok {
@@ -33,7 +38,7 @@ func (s *Storage) GetURL(key string) (string, bool) {
 }
 
 // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
-func (s *Storage) SetNewURL(key, URL string) error {
+func (s *MapDB) SetNewURL(key, URL string) error {
 	if _, ok := s.data.Load(key); ok {
 		err := fmt.Errorf("'%v' - уже существует в хранилище, запись не разрешена;", key)
 		return err

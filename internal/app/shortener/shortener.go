@@ -2,31 +2,29 @@ package shortener
 
 import (
 	"strconv"
+	"sync/atomic"
 
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 )
 
-// lastID - уникальный ключ. Так как хранилище реализовано с потокобезопасной структурой,
-// тут решено использовать канал во избежании создания одинаковых ID разными горутинами (если они будут конечно)
-// не уверен что надо делать так - но пока это работает
 type Shortener struct {
-	db     *storage.Storage
-	lastID chan int
+	// возможно лучше использовать ссылку на интерфейс? *storage.Storage
+	db     storage.Storage
+	lastID atomic.Int64
 }
 
-func New(db *storage.Storage) *Shortener {
+func New(db storage.Storage) *Shortener {
 	NewSh := Shortener{db: db}
-	NewSh.lastID = make(chan int, 1)
-	NewSh.lastID <- 100
+	// инициализации lastID под вопросом, по идеи его нужно загружать из БД по последней записи
+	// или переписать логику создания ключа на рандомные значения и последующей проверки на уникальность
+	// но с этим как я понял получится определиться и позже, когда будет внедрение БД
+	NewSh.lastID.Store(100)
 	return &NewSh
 }
 
 // создает и возвращает новый ключ
 func (s *Shortener) getNewKey() string {
-	var current = <-s.lastID
-	current++
-	s.lastID <- current
-	return strconv.Itoa(current)
+	return strconv.Itoa(int(s.lastID.Add(1)))
 }
 
 // возвращает короткий ключ; полный URL сохраняет в хранилище

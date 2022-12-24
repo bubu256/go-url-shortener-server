@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
-	"github.com/bubu256/go-url-shortener-server/pkg/config"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +20,7 @@ func TestRouting(t *testing.T) {
 	cfg := config.New()
 	cfg.DB.InitialData = initMap
 
-	dataStorage := storage.New(cfg.DB)
+	dataStorage := storage.NewMapDB(cfg.DB)
 	service := shortener.New(dataStorage)
 	handler := New(service)
 	srv := httptest.NewServer(handler.Router)
@@ -52,17 +52,17 @@ func TestRouting(t *testing.T) {
 		{
 			name: "redirect 307",
 			req:  req{method: "GET", url: "/0"},
-			want: want{statusCode: 307, location: longURL},
+			want: want{statusCode: http.StatusTemporaryRedirect, location: longURL},
 		},
 		{
 			name: "full url not found 400",
 			req:  req{method: "GET", url: "/1244241221"},
-			want: want{statusCode: 400},
+			want: want{statusCode: http.StatusBadRequest},
 		},
 		{
 			name: "create short link 201",
 			req:  req{method: "POST", url: "/", body: longURL},
-			want: want{statusCode: 201, body: srv.URL + "/101"},
+			want: want{statusCode: http.StatusCreated, body: srv.URL + "/101"},
 		},
 	}
 
