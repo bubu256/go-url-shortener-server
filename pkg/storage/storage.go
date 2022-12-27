@@ -10,6 +10,7 @@ import (
 type Storage interface {
 	GetURL(string) (string, bool)
 	SetNewURL(string, string) error
+	GetLastID() (int64, bool)
 }
 
 type MapDB struct {
@@ -46,4 +47,9 @@ func (s *MapDB) SetNewURL(key, URL string) error {
 
 	s.data.Store(key, URL)
 	return nil
+}
+
+func (s *MapDB) GetLastID() (int64, bool) {
+	// заглушка. Реализация будет при хранении данных в БД
+	return 100000, true
 }

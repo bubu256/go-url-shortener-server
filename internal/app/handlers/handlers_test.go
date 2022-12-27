@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -16,7 +17,7 @@ import (
 
 func TestRouting(t *testing.T) {
 	longURL := "https://translate.google.ru/?hl=ru&tab=wT&sl=ru&tl=en&text=%D0%A2%D0%B5%D1%81%D1%82%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5&op=translate"
-	initMap := map[string]string{"0": longURL}
+	initMap := map[string]string{"-testKey": longURL}
 	cfg := config.New()
 	cfg.DB.InitialData = initMap
 
@@ -51,25 +52,29 @@ func TestRouting(t *testing.T) {
 	}{
 		{
 			name: "redirect 307",
-			req:  req{method: "GET", url: "/0"},
+			req:  req{method: "GET", url: "/-testKey"},
 			want: want{statusCode: http.StatusTemporaryRedirect, location: longURL},
 		},
 		{
 			name: "full url not found 400",
-			req:  req{method: "GET", url: "/1244241221"},
+			req:  req{method: "GET", url: "/-noExistKey"},
 			want: want{statusCode: http.StatusBadRequest},
 		},
 		{
 			name: "create short link 201",
 			req:  req{method: "POST", url: "/", body: longURL},
-			want: want{statusCode: http.StatusCreated, body: srv.URL + "/101"},
+			// проверка body возможна токи при фиксации rand.seed в тесте
+			want: want{statusCode: http.StatusCreated, body: srv.URL + "/q0V3bS"},
 		},
 	}
 
 	for _, d := range tt {
 		t.Run(d.name, func(t *testing.T) {
+
 			r, err := http.NewRequest(d.req.method, srv.URL+d.req.url, bytes.NewBufferString(d.req.body))
 			require.NoError(t, err)
+			// фиксируем сид чтобы получить ожидаемый сокращенный ключ
+			rand.Seed(42)
 			resp, err := client.Do(r)
 			require.NoError(t, err)
 			assert.Equal(t, d.want.statusCode, resp.StatusCode)
