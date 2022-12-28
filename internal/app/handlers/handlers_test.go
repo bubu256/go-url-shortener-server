@@ -21,7 +21,7 @@ func TestRouting(t *testing.T) {
 	cfg := config.New()
 	cfg.DB.InitialData = initMap
 
-	dataStorage := storage.NewMapDB(cfg.DB)
+	dataStorage := storage.NewMapDBMutex(cfg.DB)
 	service := shortener.New(dataStorage)
 	handler := New(service)
 	srv := httptest.NewServer(handler.Router)
