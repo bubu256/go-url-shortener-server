@@ -40,7 +40,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	NewHandlers.service = service
 	router := chi.NewRouter()
 	router.Post("/", NewHandlers.HandlerURLtoShort)
-	router.Post("/api/shorten", NewHandlers.HandlerApiShorten)
+	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
 	NewHandlers.Router = router
 	return &NewHandlers
@@ -82,7 +82,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (h *Handlers) HandlerApiShorten(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
