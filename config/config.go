@@ -1,9 +1,17 @@
 package config
 
+import (
+	"log"
+
+	"github.com/caarlos0/env"
+)
+
 // здесь пока очень пусто, но наверное в будущем эта структура пригодится
 
 func New() Configuration {
-	return Configuration{Server: CfgServer{Port: "8080"}}
+	return Configuration{
+		Server: CfgServer{ServerAddress: "localhost:8080", Scheme: "http"},
+	}
 }
 
 type Configuration struct {
@@ -18,6 +26,15 @@ type CfgDataBase struct {
 }
 
 type CfgServer struct {
-	Port string
+	ServerAddress string `env:"SERVER_ADDRESS,required"`
+	Scheme        string
+	BaseURL       string `env:"BASE_URL"`
 	// ... тут будут остальные настройки для Сервера
+}
+
+func (c *Configuration) LoadFromEnv() {
+	err := env.Parse(&(c.Server))
+	if err != nil {
+		log.Println("не удалось загрузить конфигурацию сервера из переменных окружения;", err)
+	}
 }

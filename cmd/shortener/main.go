@@ -12,8 +12,9 @@ import (
 
 func main() {
 	cfg := config.New()
+	// cfg.LoadFromEnv() // загрузка параметров из переменных окружения
 	dataStorage := storage.NewMapDB(cfg.DB)
 	service := shortener.New(dataStorage)
-	handler := handlers.New(service)
-	log.Fatal(http.ListenAndServe(":"+cfg.Server.Port, handler.Router))
+	handler := handlers.New(service, cfg.Server)
+	log.Fatal(http.ListenAndServe(cfg.Server.ServerAddress, handler.Router))
 }

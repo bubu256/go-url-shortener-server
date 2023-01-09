@@ -69,7 +69,7 @@ func (s *Shortener) getNewKey() string {
 }
 
 // возвращает короткий ключ; полный URL сохраняет в хранилище
-func (s *Shortener) CreateShortURL(fullURL string) (shortKey string, err error) {
+func (s *Shortener) CreateShortKey(fullURL string) (shortKey string, err error) {
 	key := s.getNewKey()
 	err = s.db.SetNewURL(key, fullURL)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
 	"github.com/go-chi/chi/v5"
 )
@@ -14,6 +15,7 @@ import (
 type Handlers struct {
 	Router  http.Handler
 	service *shortener.Shortener
+	baseURL url.URL
 }
 
 // структура для принятия данных в запросе из json
@@ -25,8 +27,16 @@ type OutputData struct {
 	Result string `json:"result"`
 }
 
-func New(service *shortener.Shortener) *Handlers {
-	NewHandlers := Handlers{}
+func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
+	// парсим базовый url из конфига
+	baseURL, err := url.Parse(cfgServer.BaseURL)
+	if err != nil || baseURL.Host == "" {
+		// если не вышло используем базовый url сервера и схему из конфига
+		baseURL.Scheme = cfgServer.Scheme
+		baseURL.Host = cfgServer.ServerAddress
+	}
+
+	NewHandlers := Handlers{baseURL: *baseURL}
 	NewHandlers.service = service
 	router := chi.NewRouter()
 	router.Post("/", NewHandlers.HandlerURLtoShort)
@@ -43,20 +53,21 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
-	shortKey, err := h.service.CreateShortURL(string(body))
+	shortKey, err := h.service.CreateShortKey(string(body))
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	// собираем сокращенную ссылку и пишем в тело
-	shortURL := url.URL{
-		Scheme: "http",
-		Host:   r.Host,
-		Path:   shortKey,
+	shortURL, err := h.CreateLink(shortKey)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 	w.WriteHeader(http.StatusCreated)
-	w.Write([]byte(shortURL.String()))
+	w.Write([]byte(shortURL))
 }
 
 // обработчик Get запросов, возвращает полный URL в заголовке ответа Location
@@ -87,18 +98,19 @@ func (h *Handlers) HandlerApiShorten(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortKey, err := h.service.CreateShortURL(inputData.URL)
+	shortKey, err := h.service.CreateShortKey(inputData.URL)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	shortURL := url.URL{
-		Scheme: "http",
-		Host:   r.Host,
-		Path:   shortKey,
+	shortURL, err := h.CreateLink(shortKey)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
-	outputData := OutputData{Result: shortURL.String()}
+	outputData := OutputData{Result: shortURL}
 	result, err := json.Marshal(outputData)
 	if err != nil {
 		log.Println(err)
@@ -108,4 +120,9 @@ func (h *Handlers) HandlerApiShorten(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write(result)
+}
+
+// функция принимает ключ и возвращает короткую ссылку с baseURL
+func (h *Handlers) CreateLink(shortKey string) (string, error) {
+	return url.JoinPath(h.baseURL.String(), shortKey)
 }

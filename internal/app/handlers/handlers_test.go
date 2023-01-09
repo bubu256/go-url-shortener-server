@@ -21,9 +21,11 @@ func TestRouting(t *testing.T) {
 	initMap := map[string]string{"-testKey": longURL}
 	cfg := config.New()
 	cfg.DB.InitialData = initMap
+	cfg.Server.BaseURL = "http://example.com"
+	cfg.LoadFromEnv()
 	dataStorage := storage.NewMapDBMutex(cfg.DB)
 	service := shortener.New(dataStorage)
-	handler := New(service)
+	handler := New(service, cfg.Server)
 	srv := httptest.NewServer(handler.Router)
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -33,10 +35,6 @@ func TestRouting(t *testing.T) {
 	defer srv.Close()
 
 	shortKeySeed42 := "/q0V3bS"
-	// jsonInput, err := json.Marshal(InputData{longURL})
-	// require.NoError(t, err)
-	// jsonOut, err := json.Marshal(OutputData{srv.URL + shortKeySeed42})
-	// require.NoError(t, err)
 
 	type want struct {
 		body       string
@@ -68,19 +66,8 @@ func TestRouting(t *testing.T) {
 			name: "create short link 201",
 			req:  req{method: "POST", url: "/", body: longURL},
 			// проверка body возможна только при фиксации rand.seed в тесте
-			want: want{statusCode: http.StatusCreated, body: srv.URL + shortKeySeed42},
+			want: want{statusCode: http.StatusCreated, body: cfg.Server.BaseURL + shortKeySeed42},
 		},
-		// {
-		// 	name: "api/shorten json create link 201",
-		// 	req: req{
-		// 		method: "POST",
-		// 		url:    "/api/shorten",
-		// 		body:   string(jsonInput),
-
-		// 	},
-		// 	// проверка body возможна только при фиксации rand.seed в тесте
-		// 	want: want{statusCode: http.StatusCreated, body: string(jsonOut)},
-		// },
 	}
 
 	for _, d := range tt {
@@ -106,9 +93,10 @@ func TestRouting(t *testing.T) {
 
 func TestHandlers_HandlerApiShorten(t *testing.T) {
 	cfg := config.New()
+	cfg.Server.BaseURL = "http://example.com"
 	dataStorage := storage.NewMapDB(cfg.DB)
 	service := shortener.New(dataStorage)
-	handler := New(service)
+	handler := New(service, cfg.Server)
 
 	type want struct {
 		body        string
@@ -133,11 +121,9 @@ func TestHandlers_HandlerApiShorten(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rand.Seed(42)
-			// h := Handlers{}
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("POST", "/api/shorten", bytes.NewBufferString(tt.req.body))
 			r.Header.Set("Content-Type", "application/json")
-			// h := &Handlers{}
 			handler.HandlerApiShorten(w, r)
 			result := w.Result()
 			assert.Equal(t, tt.want.statusCode, result.StatusCode)
