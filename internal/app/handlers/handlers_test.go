@@ -22,8 +22,9 @@ func TestRouting(t *testing.T) {
 	cfg := config.New()
 	cfg.DB.InitialData = initMap
 	cfg.Server.BaseURL = "http://example.com"
+	// os.Setenv("FILE_STORAGE_PATH", "C:/Users/annza/tempfile.storage")
 	cfg.LoadFromEnv()
-	dataStorage := storage.NewMapDBMutex(cfg.DB)
+	dataStorage := storage.NewMapDB(cfg.DB)
 	service := shortener.New(dataStorage)
 	handler := New(service, cfg.Server)
 	srv := httptest.NewServer(handler.Router)
@@ -33,8 +34,6 @@ func TestRouting(t *testing.T) {
 		},
 	}
 	defer srv.Close()
-
-	shortKeySeed42 := "/q0V3bS"
 
 	type want struct {
 		body       string
@@ -66,7 +65,7 @@ func TestRouting(t *testing.T) {
 			name: "create short link 201",
 			req:  req{method: "POST", url: "/", body: longURL},
 			// проверка body возможна только при фиксации rand.seed в тесте
-			want: want{statusCode: http.StatusCreated, body: cfg.Server.BaseURL + shortKeySeed42},
+			want: want{statusCode: http.StatusCreated, body: cfg.Server.BaseURL + "/23bS"},
 		},
 	}
 
@@ -115,7 +114,7 @@ func TestHandlers_HandlerApiShorten(t *testing.T) {
 		{
 			name: "api json created link",
 			req:  req{contentType: "application/json", body: `{"url":"https://translate.google.ru/?hl=ru&tab=wT&sl=ru&tl=en&text=%D1%82%D0%B5%D1%81%D1%82%20%20%20&op=translate"}`},
-			want: want{statusCode: http.StatusCreated, contentType: "application/json", body: `{"result":"http://example.com/q0V3bS"}`},
+			want: want{statusCode: http.StatusCreated, contentType: "application/json", body: `{"result":"http://example.com/13bS"}`},
 		},
 	}
 	for _, tt := range tests {
