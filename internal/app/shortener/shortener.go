@@ -34,7 +34,7 @@ func New(db storage.Storage) *Shortener {
 		NewSh.lastID.Store(lastID)
 	} else {
 		log.Println("не удалось получить последний id из хранилища. LastID установлен 100000")
-		NewSh.lastID.Store(100)
+		NewSh.lastID.Store(100000)
 	}
 	return &NewSh
 }

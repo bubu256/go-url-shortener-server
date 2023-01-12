@@ -23,7 +23,6 @@ func TestRouting(t *testing.T) {
 	cfg.DB.InitialData = initMap
 	cfg.Server.BaseURL = "http://example.com"
 	// os.Setenv("FILE_STORAGE_PATH", "C:/Users/annza/tempfile.storage")
-	cfg.LoadFromEnv()
 	dataStorage := storage.NewMapDB(cfg.DB)
 	service := shortener.New(dataStorage)
 	handler := New(service, cfg.Server)

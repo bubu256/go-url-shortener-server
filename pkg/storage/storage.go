@@ -73,6 +73,9 @@ func NewMapDB(cfgDB config.CfgDataBase) *MapDB {
 			NewStorage.data.Store(k, v)
 		}
 	}
+	if cfgDB.FileStoragePath == "" {
+		return &NewStorage
+	}
 	// загружаем данные из файла если он есть
 	file, err := NewRWFile(cfgDB)
 	if err == nil {
@@ -152,7 +155,7 @@ type RWFile struct {
 func NewRWFile(cfgDB config.CfgDataBase) (*RWFile, error) {
 	file, err := os.OpenFile(cfgDB.FileStoragePath, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
-		// log.Println("Не удалось открыть файл;", err)
+		log.Println("Не удалось открыть файл;", err, "; path", cfgDB.FileStoragePath)
 		return nil, err
 	}
 	rwf := RWFile{file: file, encoder: json.NewEncoder(file), decoder: json.NewDecoder(file), path: cfgDB.FileStoragePath}
