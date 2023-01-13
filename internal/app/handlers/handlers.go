@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/json"
 	"io"
@@ -142,16 +143,19 @@ func (w newWriter) Write(b []byte) (int, error) {
 
 // Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
 func gzipWriter(next http.Handler) http.Handler {
+	// используем замыкание чтобы не создавать каждый раз новый объект используя NewWriterLevel
+	gzWriter, err := gzip.NewWriterLevel(&bytes.Buffer{}, gzip.BestSpeed)
+	if err != nil {
+		log.Println("ошибка при создании gzWriter:", err)
+		return next
+	}
+
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
 			return
 		}
-		gzWriter, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		gzWriter.Reset(w)
 		defer gzWriter.Close()
 
 		w.Header().Set("Content-Encoding", "gzip")
@@ -162,11 +166,22 @@ func gzipWriter(next http.Handler) http.Handler {
 
 // Middleware функция для POST распаковывает сжатый gzip (Content-Type: gzip)
 func gzipReader(next http.Handler) http.Handler {
+	// создать gzReader так же как gzWriter не получилось
+	// gzip.NewReader возвращает ошибку EOF
+	// решения пока не нашел
+	//
+	// gzReader, err := gzip.NewReader(&bytes.Buffer{}) // ошибка EOF
+	// if err != nil {
+	// 	log.Println("ошибка при создании gzReader:", err)
+	// 	return next
+	// }
+
 	fn := func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.Header.Get("Content-Encoding") != "gzip" {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// gzReader.Reset(r.Body)
 		gzReader, err := gzip.NewReader(r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
