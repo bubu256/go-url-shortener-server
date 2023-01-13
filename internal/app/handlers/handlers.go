@@ -144,13 +144,14 @@ func (w newWriter) Write(b []byte) (int, error) {
 // Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
 func gzipWriter(next http.Handler) http.Handler {
 	// используем замыкание чтобы не создавать каждый раз новый объект используя NewWriterLevel
+	// есть ли тут проблемы с потокобезопасностью?
 	gzWriter, err := gzip.NewWriterLevel(&bytes.Buffer{}, gzip.BestSpeed)
 	if err != nil {
 		log.Println("ошибка при создании gzWriter:", err)
 		return next
 	}
 
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
 			next.ServeHTTP(w, r)
 			return
@@ -160,36 +161,33 @@ func gzipWriter(next http.Handler) http.Handler {
 
 		w.Header().Set("Content-Encoding", "gzip")
 		next.ServeHTTP(newWriter{ResponseWriter: w, Writer: gzWriter}, r)
-	}
-	return http.HandlerFunc(fn)
+	})
 }
 
 // Middleware функция для POST распаковывает сжатый gzip (Content-Type: gzip)
 func gzipReader(next http.Handler) http.Handler {
-	// создать gzReader так же как gzWriter не получилось
-	// gzip.NewReader возвращает ошибку EOF
-	// решения пока не нашел
-	//
-	// gzReader, err := gzip.NewReader(&bytes.Buffer{}) // ошибка EOF
-	// if err != nil {
-	// 	log.Println("ошибка при создании gzReader:", err)
-	// 	return next
-	// }
+	// готовим буфер для последующего создания ридера
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	_, err := gw.Write([]byte{})
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer gw.Close()
+	// создаем ридер
+	gzReader, err := gzip.NewReader(&buf)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.Header.Get("Content-Encoding") != "gzip" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// gzReader.Reset(r.Body)
-		gzReader, err := gzip.NewReader(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+		gzReader.Reset(r.Body)
 		defer gzReader.Close()
 		r.Body = gzReader
 		next.ServeHTTP(w, r)
-	}
-	return http.HandlerFunc(fn)
+	})
 }
