@@ -1,11 +1,13 @@
 package handlers
 
 import (
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -39,6 +41,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	NewHandlers := Handlers{baseURL: *baseURL}
 	NewHandlers.service = service
 	router := chi.NewRouter()
+	router.Use(gzipWriter, gzipReader)
 	router.Post("/", NewHandlers.HandlerURLtoShort)
 	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
@@ -117,7 +120,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write(result)
 }
@@ -125,4 +128,53 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 // функция принимает ключ и возвращает короткую ссылку с baseURL
 func (h *Handlers) CreateLink(shortKey string) (string, error) {
 	return url.JoinPath(h.baseURL.String(), shortKey)
+}
+
+// структура для подмены writer
+type newWriter struct {
+	http.ResponseWriter
+	Writer io.Writer
+}
+
+func (w newWriter) Write(b []byte) (int, error) {
+	return w.Writer.Write(b)
+}
+
+// Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
+func gzipWriter(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gzWriter, err := gzip.NewWriterLevel(w, gzip.BestSpeed)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer gzWriter.Close()
+
+		w.Header().Set("Content-Encoding", "gzip")
+		next.ServeHTTP(newWriter{ResponseWriter: w, Writer: gzWriter}, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+// Middleware функция для POST распаковывает сжатый gzip (Content-Type: gzip)
+func gzipReader(next http.Handler) http.Handler {
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.Header.Get("Content-Encoding") != "gzip" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		gzReader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer gzReader.Close()
+		r.Body = gzReader
+		next.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
 }
