@@ -16,6 +16,19 @@ type Storage interface {
 	GetLastID() (int64, bool)
 }
 
+func New(cfgDB config.CfgDataBase) Storage {
+	// создаем базовый Storage
+	newStorage := NewMapDB(cfgDB)
+	// если указан путь к файлу создаем Storage с чтением/записью в файл
+	if cfgDB.FileStoragePath != "" {
+		fileStorage, err := NewWrapToSaveFile(cfgDB.FileStoragePath, newStorage)
+		if err == nil {
+			return fileStorage
+		}
+	}
+	return newStorage
+}
+
 // хранилище реализованное с mutex
 type MapDBMutex struct {
 	data  map[string]string
@@ -60,10 +73,8 @@ func (s *MapDBMutex) GetLastID() (int64, bool) {
 }
 
 // хранилище реализованное на sync.Map
-// с сохранением данных в файл
 type MapDB struct {
 	data sync.Map
-	file *RWFile
 }
 
 func NewMapDB(cfgDB config.CfgDataBase) Storage {
@@ -73,35 +84,15 @@ func NewMapDB(cfgDB config.CfgDataBase) Storage {
 			NewStorage.data.Store(k, v)
 		}
 	}
-	if cfgDB.FileStoragePath == "" {
-		return &NewStorage
-	}
-	// загружаем данные из файла если он есть
-	file, err := NewRWFile(cfgDB)
-	if err == nil {
-		defer file.Close()
-		NewStorage.file = file
-		match, err := NewStorage.file.ReadMatch()
-		countRead := 0
-		for err == nil {
-			countRead++
-			NewStorage.data.Store(match.ShortKey, match.FullURL)
-			match, err = NewStorage.file.ReadMatch()
-		}
-		log.Println("Из файла", NewStorage.file.path, "загружено элементов:", countRead)
-	}
-
 	return &NewStorage
 }
 
 // возвращает полный URL по ключу
 func (s *MapDB) GetURL(key string) (string, bool) {
-
 	fullURL, ok := s.data.Load(key)
 	if !ok {
 		return "", ok
 	}
-
 	return fullURL.(string), true
 }
 
@@ -113,16 +104,6 @@ func (s *MapDB) SetNewURL(key, URL string) error {
 	}
 
 	s.data.Store(key, URL)
-
-	// если file существует записываем в него
-	if s.file != nil {
-		err := s.file.OpenAppend()
-		if err != nil {
-			return err
-		}
-		defer s.file.Close()
-		s.file.WriteMatch(Match{ShortKey: key, FullURL: URL})
-	}
 	return nil
 }
 
@@ -135,6 +116,53 @@ func (s *MapDB) GetLastID() (int64, bool) {
 	})
 
 	return length, true
+}
+
+// структура для Storage дополнительно сохраняет данные в файл
+type WrapToSaveFile struct {
+	storage Storage
+	file    *RWFile
+}
+
+func (s *WrapToSaveFile) SetNewURL(key string, URL string) error {
+	// пишем в файл и вызываем стандартный обработчик
+	err := s.file.OpenAppend()
+	if err != nil {
+		return err
+	}
+	defer s.file.Close()
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL})
+
+	return s.storage.SetNewURL(key, URL)
+}
+
+func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
+	return s.storage.GetURL(key)
+}
+
+func (s *WrapToSaveFile) GetLastID() (int64, bool) {
+	return s.storage.GetLastID()
+}
+
+// Возвращает Storage с на основе исходного (st) с возможность работать с файлом
+func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
+	//загружаем данные из файла если он есть
+	file, err := NewRWFile(pathFile)
+	if err != nil {
+		return st, err
+	}
+	defer file.Close()
+	file.path = pathFile
+	match, err := file.ReadMatch()
+	countRead := 0
+	for err == nil {
+		countRead++
+		st.SetNewURL(match.ShortKey, match.FullURL)
+		match, err = file.ReadMatch()
+	}
+	log.Println("Из файла", file.path, "загружено элементов:", countRead)
+
+	return &WrapToSaveFile{storage: st, file: file}, nil
 }
 
 // структура для сериализации данных
@@ -152,13 +180,13 @@ type RWFile struct {
 }
 
 // создает структуру с открытым файлом на чтение/запись и decoder, encoder
-func NewRWFile(cfgDB config.CfgDataBase) (*RWFile, error) {
-	file, err := os.OpenFile(cfgDB.FileStoragePath, os.O_RDWR|os.O_CREATE, 0777)
+func NewRWFile(pathFile string) (*RWFile, error) {
+	file, err := os.OpenFile(pathFile, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
-		log.Println("Не удалось открыть файл;", err, "; path", cfgDB.FileStoragePath)
+		log.Println("Не удалось открыть файл;", err, "; path", pathFile)
 		return nil, err
 	}
-	rwf := RWFile{file: file, encoder: json.NewEncoder(file), decoder: json.NewDecoder(file), path: cfgDB.FileStoragePath}
+	rwf := RWFile{file: file, encoder: json.NewEncoder(file), decoder: json.NewDecoder(file), path: pathFile}
 	return &rwf, nil
 }
 
@@ -166,6 +194,7 @@ func (r *RWFile) WriteMatch(match Match) error {
 	return r.encoder.Encode(match)
 }
 
+// декодирует элемент Match из файла
 func (r *RWFile) ReadMatch() (*Match, error) {
 	match := Match{}
 	err := r.decoder.Decode(&match)
