@@ -18,7 +18,7 @@ import (
 type Handlers struct {
 	Router  http.Handler
 	service *shortener.Shortener
-	baseURL url.URL
+	baseURL string
 }
 
 // структура для принятия данных в запросе из json
@@ -31,15 +31,10 @@ type OutputData struct {
 }
 
 func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
-	// парсим базовый url из конфига
-	baseURL, err := url.Parse(cfgServer.BaseURL)
-	if err != nil || baseURL.Host == "" {
-		// если не вышло используем базовый url сервера и схему из конфига
-		baseURL.Scheme = cfgServer.Scheme
-		baseURL.Host = cfgServer.ServerAddress
+	if service == nil {
+		log.Fatal("указатель на структуру shortener.Shortener должен быть != nil;")
 	}
-
-	NewHandlers := Handlers{baseURL: *baseURL}
+	NewHandlers := Handlers{baseURL: cfgServer.BaseURL}
 	NewHandlers.service = service
 	router := chi.NewRouter()
 	router.Use(gzipWriter, gzipReader)
@@ -64,7 +59,7 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// собираем сокращенную ссылку и пишем в тело
-	shortURL, err := h.CreateLink(shortKey)
+	shortURL, err := h.createLink(shortKey)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -108,7 +103,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	shortURL, err := h.CreateLink(shortKey)
+	shortURL, err := h.createLink(shortKey)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -126,9 +121,9 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	w.Write(result)
 }
 
-// функция принимает ключ и возвращает короткую ссылку с baseURL
-func (h *Handlers) CreateLink(shortKey string) (string, error) {
-	return url.JoinPath(h.baseURL.String(), shortKey)
+// функция принимает ключ и возвращает короткую ссылку на основе Handlers.baseURL
+func (h *Handlers) createLink(shortKey string) (string, error) {
+	return url.JoinPath(h.baseURL, shortKey)
 }
 
 // структура для подмены writer

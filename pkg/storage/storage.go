@@ -22,11 +22,11 @@ type MapDBMutex struct {
 	mutex sync.Mutex
 }
 
-func NewMapDBMutex(cfgDB config.CfgDataBase) *MapDB {
-	NewStorage := MapDB{}
+func NewMapDBMutex(cfgDB config.CfgDataBase) Storage {
+	NewStorage := MapDBMutex{}
 	if cfgDB.InitialData != nil {
 		for k, v := range cfgDB.InitialData {
-			NewStorage.data.Store(k, v)
+			NewStorage.SetNewURL(k, v)
 		}
 	}
 	return &NewStorage
@@ -66,7 +66,7 @@ type MapDB struct {
 	file *RWFile
 }
 
-func NewMapDB(cfgDB config.CfgDataBase) *MapDB {
+func NewMapDB(cfgDB config.CfgDataBase) Storage {
 	NewStorage := MapDB{}
 	if cfgDB.InitialData != nil {
 		for k, v := range cfgDB.InitialData {

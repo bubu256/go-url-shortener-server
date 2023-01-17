@@ -3,6 +3,7 @@ package config
 import (
 	"flag"
 	"log"
+	"net/url"
 
 	"github.com/caarlos0/env"
 )
@@ -53,7 +54,17 @@ func (c *Configuration) LoadFromEnv() {
 // функция парсит флаги запуска
 func (c *Configuration) LoadFromFlag() {
 	flag.StringVar(&(c.Server.ServerAddress), "a", "localhost:8080", "Address to start the server (SERVER_ADDRESS environment)")
-	flag.StringVar(&(c.Server.BaseURL), "b", "http://localhost:8080", "Shortlink base address (BASE_URL environment)")
+	flag.StringVar(&(c.Server.BaseURL), "b", "", "Shortlink base address (BASE_URL environment)")
 	flag.StringVar(&(c.DB.FileStoragePath), "f", "", "path to storage files (FILE_STORAGE_PATH environment)")
 	flag.Parse()
+
+	// Проверка базового url. Устанавливаем если url не указан или он не валидный
+	baseURL, err := url.Parse(c.Server.BaseURL)
+	if err != nil || baseURL.Host == "" {
+		// если не вышло создаем базовый url на основе адреса сервера и схемы из конфига
+		baseURL.Scheme = c.Server.Scheme
+		baseURL.Host = c.Server.ServerAddress
+		c.Server.BaseURL = baseURL.String()
+		log.Printf("Конфигурация: baseURL автоматически установлен %q", c.Server.BaseURL)
+	}
 }
