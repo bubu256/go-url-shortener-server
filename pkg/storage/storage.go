@@ -71,7 +71,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 		st.SetNewURL(match.ShortKey, match.FullURL)
 		match, err = file.ReadMatch()
 	}
-	if err != nil && err != io.EOF {
+	if err != io.EOF {
 		return nil, err
 	}
 
