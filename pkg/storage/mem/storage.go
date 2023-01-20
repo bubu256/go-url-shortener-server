@@ -16,10 +16,8 @@ type MapDBMutex struct {
 
 func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBMutex {
 	NewStorage := MapDBMutex{}
-	if initData != nil {
-		for k, v := range initData {
-			NewStorage.SetNewURL(k, v)
-		}
+	for k, v := range initData {
+		NewStorage.SetNewURL(k, v)
 	}
 	return &NewStorage
 }
@@ -58,11 +56,10 @@ type MapDB struct {
 
 func NewMapDB(cfgDB config.CfgDataBase, initData map[string]string) *MapDB {
 	NewStorage := MapDB{}
-	if initData != nil {
-		for k, v := range initData {
-			NewStorage.data.Store(k, v)
-		}
+	for k, v := range initData {
+		NewStorage.data.Store(k, v)
 	}
+
 	return &NewStorage
 }
 
