@@ -22,7 +22,6 @@ type Configuration struct {
 }
 
 type CfgDataBase struct {
-	InitialData     map[string]string
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	// ... тут будут настройки для Базы данных
 }

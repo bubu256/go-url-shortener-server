@@ -10,7 +10,7 @@ import (
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
-	"github.com/bubu256/go-url-shortener-server/pkg/storage"
+	"github.com/bubu256/go-url-shortener-server/pkg/storage/mem"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -20,10 +20,10 @@ func TestRouting(t *testing.T) {
 	longURL := "https://translate.google.ru/?hl=ru&tab=wT&sl=ru&tl=en&text=%D0%A2%D0%B5%D1%81%D1%82%D0%B8%D1%80%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D0%B5&op=translate"
 	initMap := map[string]string{"-testKey": longURL}
 	cfg := config.New()
-	cfg.DB.InitialData = initMap
+	// cfg.DB.InitialData = initMap
 	cfg.Server.BaseURL = "http://example.com"
 	// os.Setenv("FILE_STORAGE_PATH", "C:/Users/annza/tempfile.storage")
-	dataStorage := storage.NewMapDB(cfg.DB)
+	dataStorage := mem.NewMapDB(cfg.DB, initMap)
 	service := shortener.New(dataStorage)
 	handler := New(service, cfg.Server)
 	srv := httptest.NewServer(handler.Router)
@@ -92,7 +92,7 @@ func TestRouting(t *testing.T) {
 func TestHandlers_HandlerApiShorten(t *testing.T) {
 	cfg := config.New()
 	cfg.Server.BaseURL = "http://example.com"
-	dataStorage := storage.NewMapDB(cfg.DB)
+	dataStorage := mem.NewMapDB(cfg.DB, nil)
 	service := shortener.New(dataStorage)
 	handler := New(service, cfg.Server)
 
