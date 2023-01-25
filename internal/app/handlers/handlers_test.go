@@ -24,7 +24,7 @@ func TestRouting(t *testing.T) {
 	cfg.Server.BaseURL = "http://example.com"
 	// os.Setenv("FILE_STORAGE_PATH", "C:/Users/annza/tempfile.storage")
 	dataStorage := mem.NewMapDB(cfg.DB, initMap)
-	service := shortener.New(dataStorage)
+	service := shortener.New(dataStorage, cfg.Service)
 	handler := New(service, cfg.Server)
 	srv := httptest.NewServer(handler.Router)
 	client := &http.Client{
@@ -93,7 +93,7 @@ func TestHandlers_HandlerApiShorten(t *testing.T) {
 	cfg := config.New()
 	cfg.Server.BaseURL = "http://example.com"
 	dataStorage := mem.NewMapDB(cfg.DB, nil)
-	service := shortener.New(dataStorage)
+	service := shortener.New(dataStorage, cfg.Service)
 	handler := New(service, cfg.Server)
 
 	type want struct {

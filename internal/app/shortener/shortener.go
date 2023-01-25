@@ -1,11 +1,14 @@
 package shortener
 
 import (
+	crand "crypto/rand"
+	"encoding/hex"
 	"log"
 	"math/rand"
 	"sync/atomic"
 	"time"
 
+	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 )
 
@@ -16,19 +19,45 @@ const (
 )
 
 type Shortener struct {
-	db     storage.Storage
-	lastID atomic.Int64
-	// количество случайных символов в конце ключа
-	rndSymbolsEnd int
+	db            storage.Storage
+	lastID        atomic.Int64
+	rndSymbolsEnd int // количество случайных символов в конце ссылки-ключа
+	secretKey     []byte
 }
 
-func New(db storage.Storage) *Shortener {
+func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	rand.Seed(time.Now().Unix())
 
+	// установка секретного ключа
+	keyByte := []byte{}
+	if cfg.SecretKey != "" {
+		hexdecode, err := hex.DecodeString(cfg.SecretKey)
+		if err != nil {
+			log.Println("ошибка декодирования секретного ключа (hex);")
+			genKey, err := GenereteRandomKey(32)
+			if err != nil {
+				log.Fatal("ошибка при генерации секретного ключа (shortener new generateRandomKey);")
+			}
+			log.Printf("создан рандомный ключ: %x", genKey)
+			keyByte = genKey
+		} else {
+			keyByte = hexdecode
+		}
+	} else {
+		genKey, err := GenereteRandomKey(32)
+		if err != nil {
+			log.Fatal("ошибка при генерации секретного ключа (shortener new generateRandomKey);")
+		}
+		log.Printf("создан рандомный ключ: %x", genKey)
+		keyByte = genKey
+	}
+	// создание сервиса
 	NewSh := Shortener{
 		db:            db,
 		rndSymbolsEnd: 3,
+		secretKey:     keyByte,
 	}
+	// инициализация счетчика количества записей
 	lastID, ok := db.GetLastID()
 	if ok {
 		NewSh.lastID.Store(lastID)
@@ -37,6 +66,15 @@ func New(db storage.Storage) *Shortener {
 		NewSh.lastID.Store(100000)
 	}
 	return &NewSh
+}
+
+func GenereteRandomKey(size int) ([]byte, error) {
+	b := make([]byte, size)
+	_, err := crand.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // создает и возвращает новый ключ состоящий из закодированного id и случайных символов в конце

@@ -16,9 +16,14 @@ func New() Configuration {
 }
 
 type Configuration struct {
-	DB     CfgDataBase
-	Server CfgServer
+	DB      CfgDataBase
+	Server  CfgServer
+	Service CfgService
 	// ... тут будут конфиги и для других модулей наверное
+}
+
+type CfgService struct {
+	SecretKey string `env:"KEY"`
 }
 
 type CfgDataBase struct {
@@ -38,6 +43,7 @@ type CfgServer struct {
 // FILE_STORAGE_PATH - путь к файлу с хранилищем
 // SERVER_ADDRESS - адрес поднимаемого сервера, например "localhost:8080"
 // BASE_URL - базовый адрес для коротких ссылок "http://localhost:8080"
+// KEY - секретный ключ для генерации токенов
 func (c *Configuration) LoadFromEnv() {
 	err := env.Parse(&(c.Server))
 	if err != nil {
@@ -55,6 +61,7 @@ func (c *Configuration) LoadFromFlag() {
 	flag.StringVar(&(c.Server.ServerAddress), "a", "localhost:8080", "Address to start the server (SERVER_ADDRESS environment)")
 	flag.StringVar(&(c.Server.BaseURL), "b", "", "Shortlink base address (BASE_URL environment)")
 	flag.StringVar(&(c.DB.FileStoragePath), "f", "", "path to storage files (FILE_STORAGE_PATH environment)")
+	flag.StringVar(&(c.Service.SecretKey), "k", "", "Secret key for token generating")
 	flag.Parse()
 
 	// Проверка базового url. Устанавливаем если url не указан или он не валидный
