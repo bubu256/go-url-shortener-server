@@ -3,6 +3,7 @@ module github.com/bubu256/go-url-shortener-server
 go 1.19
 
 require (
+	github.com/caarlos0/env v3.5.0+incompatible
 	github.com/go-chi/chi/v5 v5.0.8
 	github.com/stretchr/testify v1.8.1
 )
