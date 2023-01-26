@@ -144,7 +144,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusCreated)
 	w.Write(result)
 }
 
@@ -182,7 +182,7 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(http.StatusOK)
 	w.Write(result)
 }
 
