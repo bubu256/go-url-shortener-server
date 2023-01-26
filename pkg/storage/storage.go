@@ -12,8 +12,8 @@ import (
 
 type Storage interface {
 	GetURL(key string) (string, bool)
-	GetAllURLs(userId string) map[string]string
-	SetNewURL(key, URL, token_id string) error
+	GetAllURLs(userID string) map[string]string
+	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
 }
 
@@ -44,7 +44,7 @@ func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string) error {
 		return err
 	}
 	defer s.file.Close()
-	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID})
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, userID: TokenID})
 
 	return s.storage.SetNewURL(key, URL, TokenID)
 }
@@ -57,8 +57,8 @@ func (s *WrapToSaveFile) GetLastID() (int64, bool) {
 	return s.storage.GetLastID()
 }
 
-func (s *WrapToSaveFile) GetAllURLs(userId string) map[string]string {
-	return s.storage.GetAllURLs(userId)
+func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
+	return s.storage.GetAllURLs(userID)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
@@ -74,7 +74,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	match, err := file.ReadMatch()
 	for err == nil {
 		countRead++
-		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID)
+		st.SetNewURL(match.ShortKey, match.FullURL, match.userID)
 		match, err = file.ReadMatch()
 	}
 	if err != io.EOF {
@@ -89,7 +89,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 type Match struct {
 	ShortKey string `json:"short_key"`
 	FullURL  string `json:"full_url"`
-	UserID   string `json:"user_id"`
+	userID   string `json:"user_id"`
 }
 
 // структура для работы с файлом
