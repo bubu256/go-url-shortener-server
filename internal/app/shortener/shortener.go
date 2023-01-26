@@ -1,7 +1,9 @@
 package shortener
 
 import (
+	"crypto/hmac"
 	crand "crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"log"
 	"math/rand"
@@ -34,7 +36,7 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 		hexdecode, err := hex.DecodeString(cfg.SecretKey)
 		if err != nil {
 			log.Println("ошибка декодирования секретного ключа (hex);")
-			genKey, err := GenereteRandomKey(32)
+			genKey, err := GenerateRandomBytes(32)
 			if err != nil {
 				log.Fatal("ошибка при генерации секретного ключа (shortener new generateRandomKey);")
 			}
@@ -44,7 +46,7 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 			keyByte = hexdecode
 		}
 	} else {
-		genKey, err := GenereteRandomKey(32)
+		genKey, err := GenerateRandomBytes(32)
 		if err != nil {
 			log.Fatal("ошибка при генерации секретного ключа (shortener new generateRandomKey);")
 		}
@@ -68,13 +70,42 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	return &NewSh
 }
 
-func GenereteRandomKey(size int) ([]byte, error) {
+// генерирует рандомный набор байт
+func GenerateRandomBytes(size int) ([]byte, error) {
 	b := make([]byte, size)
 	_, err := crand.Read(b)
 	if err != nil {
 		return nil, err
 	}
 	return b, nil
+}
+
+// генерирует новый токен для пользователя
+func (s Shortener) GenerateNewToken() (string, error) {
+	id_user, err := GenerateRandomBytes(4)
+	if err != nil {
+		return "", err
+	}
+	h := hmac.New(sha256.New, s.secretKey)
+	h.Write(id_user)
+	dst := h.Sum(nil)
+	dst = append(id_user, dst...) // содержит байты id и подписи
+	// кодируем в hex и отдаем как токен в виде строки
+	return hex.EncodeToString(dst), nil
+}
+
+// проверяет подлинность токена
+func (s Shortener) CheckToken(token string) bool {
+	decodeToken, err := hex.DecodeString(token)
+	if err != nil {
+		return false
+	}
+	id_user := decodeToken[:4]
+	sing := decodeToken[4:]
+	h := hmac.New(sha256.New, s.secretKey)
+	h.Write(id_user)
+	dst := h.Sum(nil)
+	return hmac.Equal(sing, dst)
 }
 
 // создает и возвращает новый ключ состоящий из закодированного id и случайных символов в конце
@@ -107,9 +138,9 @@ func (s *Shortener) getNewKey() string {
 }
 
 // возвращает короткий ключ; полный URL сохраняет в хранилище
-func (s *Shortener) CreateShortKey(fullURL string) (shortKey string, err error) {
+func (s *Shortener) CreateShortKey(fullURL, tokenID string) (shortKey string, err error) {
 	key := s.getNewKey()
-	err = s.db.SetNewURL(key, fullURL)
+	err = s.db.SetNewURL(key, fullURL, tokenID)
 	if err != nil {
 		return "", err
 	}
@@ -118,4 +149,9 @@ func (s *Shortener) CreateShortKey(fullURL string) (shortKey string, err error) 
 
 func (s *Shortener) GetURL(shortKey string) (string, bool) {
 	return s.db.GetURL(shortKey)
+}
+
+func (s *Shortener) GetAllURLs(tokenID string) map[string]string {
+	// result := make(map[string]string)
+	return s.db.GetAllURLs(tokenID)
 }

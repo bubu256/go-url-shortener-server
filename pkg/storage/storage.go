@@ -12,13 +12,15 @@ import (
 
 type Storage interface {
 	GetURL(key string) (string, bool)
-	SetNewURL(key string, URL string) error
+	GetAllURLs(userId string) map[string]string
+	SetNewURL(key, URL, token_id string) error
 	GetLastID() (int64, bool)
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
 	// создаем базовый Storage
-	newStorage := mem.NewMapDB(cfgDB, initData)
+	newStorage := mem.NewMapDBMutex(cfgDB, initData)
+	// log.Printf("%v", newStorage)
 	// если указан путь к файлу создаем Storage с чтением/записью в файл
 	if cfgDB.FileStoragePath != "" {
 		fileStorage, err := NewWrapToSaveFile(cfgDB.FileStoragePath, newStorage)
@@ -35,16 +37,16 @@ type WrapToSaveFile struct {
 	file    *RWFile
 }
 
-func (s *WrapToSaveFile) SetNewURL(key string, URL string) error {
+func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string) error {
 	// пишем в файл и вызываем стандартный обработчик
 	err := s.file.OpenAppend()
 	if err != nil {
 		return err
 	}
 	defer s.file.Close()
-	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL})
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID})
 
-	return s.storage.SetNewURL(key, URL)
+	return s.storage.SetNewURL(key, URL, TokenID)
 }
 
 func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
@@ -53,6 +55,10 @@ func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
 
 func (s *WrapToSaveFile) GetLastID() (int64, bool) {
 	return s.storage.GetLastID()
+}
+
+func (s *WrapToSaveFile) GetAllURLs(userId string) map[string]string {
+	return s.storage.GetAllURLs(userId)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
@@ -68,7 +74,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	match, err := file.ReadMatch()
 	for err == nil {
 		countRead++
-		st.SetNewURL(match.ShortKey, match.FullURL)
+		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID)
 		match, err = file.ReadMatch()
 	}
 	if err != io.EOF {
@@ -83,6 +89,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 type Match struct {
 	ShortKey string `json:"short_key"`
 	FullURL  string `json:"full_url"`
+	UserID   string `json:"user_id"`
 }
 
 // структура для работы с файлом
