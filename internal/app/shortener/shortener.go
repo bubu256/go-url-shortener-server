@@ -31,7 +31,7 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	rand.Seed(time.Now().Unix())
 
 	// установка секретного ключа
-	keyByte := []byte{}
+	var keyByte []byte
 	if cfg.SecretKey != "" {
 		hexdecode, err := hex.DecodeString(cfg.SecretKey)
 		if err != nil {
@@ -81,29 +81,29 @@ func GenerateRandomBytes(size int) ([]byte, error) {
 }
 
 // генерирует новый токен для пользователя
-func (s Shortener) GenerateNewToken() (string, error) {
-	id_user, err := GenerateRandomBytes(4)
+func (s *Shortener) GenerateNewToken() (string, error) {
+	idUser, err := GenerateRandomBytes(4)
 	if err != nil {
 		return "", err
 	}
 	h := hmac.New(sha256.New, s.secretKey)
-	h.Write(id_user)
+	h.Write(idUser)
 	dst := h.Sum(nil)
-	dst = append(id_user, dst...) // содержит байты id и подписи
+	dst = append(idUser, dst...) // содержит байты id и подписи
 	// кодируем в hex и отдаем как токен в виде строки
 	return hex.EncodeToString(dst), nil
 }
 
 // проверяет подлинность токена
-func (s Shortener) CheckToken(token string) bool {
+func (s *Shortener) CheckToken(token string) bool {
 	decodeToken, err := hex.DecodeString(token)
 	if err != nil {
 		return false
 	}
-	id_user := decodeToken[:4]
+	idUser := decodeToken[:4]
 	sing := decodeToken[4:]
 	h := hmac.New(sha256.New, s.secretKey)
-	h.Write(id_user)
+	h.Write(idUser)
 	dst := h.Sum(nil)
 	return hmac.Equal(sing, dst)
 }
