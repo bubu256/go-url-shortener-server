@@ -44,7 +44,7 @@ func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string) error {
 		return err
 	}
 	defer s.file.Close()
-	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, userID: TokenID})
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID})
 
 	return s.storage.SetNewURL(key, URL, TokenID)
 }
@@ -74,7 +74,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	match, err := file.ReadMatch()
 	for err == nil {
 		countRead++
-		st.SetNewURL(match.ShortKey, match.FullURL, match.userID)
+		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID)
 		match, err = file.ReadMatch()
 	}
 	if err != io.EOF {
@@ -89,7 +89,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 type Match struct {
 	ShortKey string `json:"short_key"`
 	FullURL  string `json:"full_url"`
-	userID   string `json:"user_id"`
+	UserID   string `json:"user_id"`
 }
 
 // структура для работы с файлом
