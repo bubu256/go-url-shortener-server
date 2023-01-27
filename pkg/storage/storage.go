@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -15,6 +16,7 @@ type Storage interface {
 	GetAllURLs(userID string) map[string]string
 	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
+	Ping(ctx context.Context) error
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
@@ -59,6 +61,10 @@ func (s *WrapToSaveFile) GetLastID() (int64, bool) {
 
 func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 	return s.storage.GetAllURLs(userID)
+}
+
+func (s *WrapToSaveFile) Ping(ctx context.Context) error {
+	return s.storage.Ping(ctx)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
