@@ -1,16 +1,11 @@
 package mem
 
 import (
-	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	_ "github.com/lib/pq"
-	// _ "github.com/jackc/pgx/v5"
-	// sql: unknown driver "pgx" (forgotten import?)
-	// or sql: unknown driver "postgres" (forgotten import?)
 )
 
 // хранилище реализованное с mutex
@@ -34,13 +29,11 @@ func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBM
 // сейчас реализация временно пингует базу данных данный
 // метод мигрирует в новую реализацию интерфейса с БД
 // а тут будет проверка полей keyToURL и userToKeys на не равенство nil
-func (s *MapDBMutex) Ping(ctx context.Context) error {
-	db, err := sql.Open("postgres", s.connectingString)
-	if err != nil {
-		return err
+func (s *MapDBMutex) Ping() error {
+	if s.keyToURL == nil || s.userToKeys == nil {
+		return errors.New("s.keyToURL == nil || s.userToKeys == nil;")
 	}
-	defer db.Close()
-	return db.PingContext(ctx)
+	return nil
 }
 
 // возвращает полный URL по ключу

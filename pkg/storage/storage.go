@@ -1,7 +1,6 @@
 package storage
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -9,6 +8,7 @@ import (
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/mem"
+	"github.com/bubu256/go-url-shortener-server/pkg/storage/postgres"
 )
 
 type Storage interface {
@@ -16,11 +16,18 @@ type Storage interface {
 	GetAllURLs(userID string) map[string]string
 	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
-	Ping(ctx context.Context) error
+	Ping() error
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
-	// создаем базовый Storage
+	if cfgDB.DataBaseDSN != "" {
+		db, err := postgres.New(cfgDB)
+		if err == nil {
+			return db
+		}
+		log.Println(err)
+	}
+	// создаем базовый Storage mem
 	newStorage := mem.NewMapDBMutex(cfgDB, initData)
 	// log.Printf("%v", newStorage)
 	// если указан путь к файлу создаем Storage с чтением/записью в файл
@@ -63,8 +70,8 @@ func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 	return s.storage.GetAllURLs(userID)
 }
 
-func (s *WrapToSaveFile) Ping(ctx context.Context) error {
-	return s.storage.Ping(ctx)
+func (s *WrapToSaveFile) Ping() error {
+	return s.storage.Ping()
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом

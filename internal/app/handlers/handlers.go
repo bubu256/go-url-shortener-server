@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"compress/gzip"
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -11,7 +10,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -59,9 +57,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 
 // GET пингует базу данных
 func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
-	err := h.service.PingDB(ctx)
+	err := h.service.PingDB()
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -228,7 +224,7 @@ func (h *Handlers) TokenHandler(next http.Handler) http.Handler {
 				return
 			}
 			// ставим новые куки и в ответ и в запрос
-			cookie := &http.Cookie{Name: "token", Value: newToken}
+			cookie := &http.Cookie{Name: "token", Value: newToken, Path: "/"}
 			http.SetCookie(w, cookie)
 			// token.Value = newToken // меняем в request значение токена на новый
 			// r.Cookies()

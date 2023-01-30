@@ -1,7 +1,6 @@
 package shortener
 
 import (
-	"context"
 	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/sha256"
@@ -72,8 +71,8 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 }
 
 // пингует ДБ
-func (s *Shortener) PingDB(ctx context.Context) error {
-	return s.db.Ping(ctx)
+func (s *Shortener) PingDB() error {
+	return s.db.Ping()
 }
 
 // генерирует рандомный набор байт
