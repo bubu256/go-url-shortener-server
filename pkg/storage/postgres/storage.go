@@ -22,6 +22,18 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	if err != nil {
 		return nil, err
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	query := `CREATE TABLE IF NOT EXISTS urls(
+		short_id CHAR(10) PRIMARY KEY NOT NULL,
+		full_url TEXT,
+		user_id CHAR(72) NOt NULL
+	);`
+	_, err = db.ExecContext(ctx, query)
+	if err != nil {
+		log.Println(err)
+	}
+
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
 }
 
