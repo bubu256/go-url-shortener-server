@@ -18,7 +18,7 @@ type Storage interface {
 	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
 	Ping() error
-	SetBatchURLs(batch data.ApiShortenBatch, token string) error
+	SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error)
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
@@ -76,8 +76,8 @@ func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
 }
 
-func (s *WrapToSaveFile) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
-	return s.SetBatchURLs(batch, token)
+func (s *WrapToSaveFile) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+	return s.storage.SetBatchURLs(batch, token)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом

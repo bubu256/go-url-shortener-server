@@ -71,7 +71,7 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	return &NewSh
 }
 
-func (s *Shortener) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
+func (s *Shortener) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
 	return s.db.SetBatchURLs(batch, token)
 }
 

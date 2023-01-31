@@ -11,7 +11,7 @@ import (
 	"net/url"
 	"strings"
 
-	. "github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -36,7 +36,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
 	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/api/user/urls", NewHandlers.HandlerAPIUserAllURLs)
-	router.Post("/api/shorten/batch", NewHandlers.HandlerApiShortenBatch)
+	router.Post("/api/shorten/batch", NewHandlers.userIDHandlerAPIShortenBatch)
 	router.Get("/ping", NewHandlers.HandlerPing)
 	NewHandlers.Router = router
 	return &NewHandlers
@@ -96,7 +96,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST записывает сокращенный идентификатор и полный урл в хранилище
-func (h *Handlers) HandlerApiShortenBatch(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) userIDHandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -109,7 +109,7 @@ func (h *Handlers) HandlerApiShortenBatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// парсим json
-	batch := ApiShortenBatch{}
+	batch := data.APIShortenBatchInput{}
 	err = json.Unmarshal(body, &batch)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -122,13 +122,32 @@ func (h *Handlers) HandlerApiShortenBatch(w http.ResponseWriter, r *http.Request
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 	}
-	err = h.service.SetBatchURLs(batch, token)
+	shortKeys, err := h.service.SetBatchURLs(batch, token)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 		return
 	}
+	batchOut := make(data.APIShortenBatchOutput, len(shortKeys))
+	for i, key := range shortKeys {
+		batchOut[i].CorrelationID = key
+		fullURL, err := h.createLink(key)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		batchOut[i].ShortURL = fullURL
+	}
+
+	result, err := json.Marshal(batchOut)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	w.Write(result)
 }
 
 // POST возвращает сокращенный URL в json формате
@@ -143,7 +162,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
-	inputData := InputData{}
+	inputData := data.APIShortenInput{}
 	err = json.Unmarshal(body, &inputData)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -170,8 +189,8 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// пишем ответ
-	ApiShorten := ApiShorten{Result: shortURL}
-	result, err := json.Marshal(ApiShorten)
+	output := data.APIShortenOutput{Result: shortURL}
+	result, err := json.Marshal(output)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -195,7 +214,7 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	outUrls := make(ApiUserURLs, len(allURLs))
+	outUrls := make(data.APIUserURLs, len(allURLs))
 	i := 0
 	for k, v := range allURLs {
 		shortURL, err := h.createLink(k)

@@ -37,12 +37,16 @@ func (s *MapDBMutex) Ping() error {
 	return nil
 }
 
-func (s *MapDBMutex) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
+func (s *MapDBMutex) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
-		// если короткий идентификатор уже существует в SetNewURL добавление не произойдет
-		s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token)
+		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token)
+		if err != nil {
+			continue
+		}
+		result = append(result, elem.CorrelationID)
 	}
-	return nil
+	return result, nil
 }
 
 // возвращает полный URL по ключу
