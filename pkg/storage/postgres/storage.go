@@ -26,7 +26,7 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
 	query := `CREATE TABLE IF NOT EXISTS urls(
-		short_id CHAR(10) PRIMARY KEY NOT NULL,
+		short_id CHAR(50) PRIMARY KEY NOT NULL,
 		full_url TEXT,
 		user_id CHAR(72) NOt NULL
 	);`
