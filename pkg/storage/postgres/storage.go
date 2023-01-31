@@ -10,6 +10,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/bubu256/go-url-shortener-server/config"
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 )
 
 type PDStore struct {
@@ -35,6 +36,39 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	}
 
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
+}
+
+func (p *PDStore) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	stmnt, err := tx.Prepare("INSERT INTO urls (short_id, full_url, user_id) VALUES ($1, $2, $3)")
+	if err != nil {
+		return err
+	}
+	find, err := tx.Prepare("select 1 from urls where short_id = $1")
+	if err != nil {
+		return err
+	}
+	defer stmnt.Close()
+	for _, elem := range batch {
+		var is_finded bool
+		find.QueryRow(elem.CorrelationID).Scan(&is_finded)
+		if is_finded {
+			continue
+		}
+		_, err := stmnt.Exec(elem.CorrelationID, elem.OriginalURL, token)
+		if err != nil {
+			log.Println(err)
+			return err
+		}
+	}
+	tx.Commit()
+	return nil
 }
 
 func (p *PDStore) GetURL(key string) (string, bool) {

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/bubu256/go-url-shortener-server/config"
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/mem"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/postgres"
 )
@@ -17,6 +18,7 @@ type Storage interface {
 	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
 	Ping() error
+	SetBatchURLs(batch data.ApiShortenBatch, token string) error
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
@@ -72,6 +74,10 @@ func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 
 func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
+}
+
+func (s *WrapToSaveFile) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
+	return s.SetBatchURLs(batch, token)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/bubu256/go-url-shortener-server/config"
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 )
 
@@ -68,6 +69,10 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 		NewSh.lastID.Store(100000)
 	}
 	return &NewSh
+}
+
+func (s *Shortener) SetBatchURLs(batch data.ApiShortenBatch, token string) error {
+	return s.db.SetBatchURLs(batch, token)
 }
 
 // пингует ДБ
