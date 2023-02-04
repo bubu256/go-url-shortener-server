@@ -62,7 +62,7 @@ func TestRouting(t *testing.T) {
 		},
 		{
 			name: "create short link 201",
-			req:  req{method: "POST", url: "/", body: longURL},
+			req:  req{method: "POST", url: "/", body: longURL + "2312321"},
 			// проверка body возможна только при фиксации rand.seed в тесте
 			want: want{statusCode: http.StatusCreated, body: cfg.Server.BaseURL + "/23bS"},
 		},
