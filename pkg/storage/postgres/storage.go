@@ -11,6 +11,8 @@ import (
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/jackc/pgerrcode"
 )
 
 type PDStore struct {
@@ -27,7 +29,7 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	defer cancel()
 	query := `CREATE TABLE IF NOT EXISTS urls(
 		short_id CHAR(50) PRIMARY KEY NOT NULL,
-		full_url TEXT,
+		full_url TEXT UNIQUE,
 		user_id CHAR(72) NOt NULL
 	);`
 	_, err = db.ExecContext(ctx, query)
@@ -121,6 +123,15 @@ func (p *PDStore) SetNewURL(key, URL, tokenID string) error {
 	defer cancel()
 	query := "INSERT INTO urls (short_id, full_url, user_id) VALUES ($1, $2, $3)"
 	_, err := p.db.ExecContext(ctx, query, key, URL, tokenID)
+	if err != nil && strings.Contains(err.Error(), pgerrcode.UniqueViolation) {
+		query := "select short_id from urls where full_url = $1 "
+		var key string
+		err := p.db.QueryRowContext(ctx, query, URL).Scan(&key)
+		if err != nil {
+			return err
+		}
+		return errorapp.NewURLDuplicateError(err, strings.TrimSpace(key), URL)
+	}
 	return err
 }
 

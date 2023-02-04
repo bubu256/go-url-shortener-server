@@ -7,6 +7,7 @@ import (
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 )
 
 // хранилище реализованное с mutex
@@ -27,9 +28,6 @@ func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBM
 	return &NewStorage
 }
 
-// сейчас реализация временно пингует базу данных данный
-// метод мигрирует в новую реализацию интерфейса с БД
-// а тут будет проверка полей keyToURL и userToKeys на не равенство nil
 func (s *MapDBMutex) Ping() error {
 	if s.keyToURL == nil || s.userToKeys == nil {
 		return errors.New("s.keyToURL == nil || s.userToKeys == nil;")
@@ -76,12 +74,19 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 
 // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
 func (s *MapDBMutex) SetNewURL(key, URL, tokenID string) error {
+	// проверяем существует ли урл
+	// наверное это очень дорогая операция для проверки на дупликацию урл, но как лучше пока не знаю
+	for existKey, fullURL := range s.keyToURL {
+		if fullURL == URL {
+			return errorapp.NewURLDuplicateError(
+				fmt.Errorf("запись URL %s невозможна т.к. он уже есть базе;", URL),
+				existKey,
+				fullURL,
+			)
+		}
+	}
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
-	if _, ok := s.keyToURL[key]; ok {
-		err := fmt.Errorf("'%v' - уже существует в хранилище, запись не разрешена;", key)
-		return err
-	}
 	s.keyToURL[key] = URL
 	s.userToKeys[tokenID] = append(s.userToKeys[tokenID], key)
 	return nil

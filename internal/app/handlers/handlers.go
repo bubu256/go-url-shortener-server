@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -36,7 +37,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
 	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/api/user/urls", NewHandlers.HandlerAPIUserAllURLs)
-	router.Post("/api/shorten/batch", NewHandlers.userIDHandlerAPIShortenBatch)
+	router.Post("/api/shorten/batch", NewHandlers.HandlerAPIShortenBatch)
 	router.Get("/ping", NewHandlers.HandlerPing)
 	NewHandlers.Router = router
 	return &NewHandlers
@@ -54,23 +55,31 @@ func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
 
 // обработчик Post запросов, возвращает сокращенный URL в теле ответа
 func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
+	StatusCode := 0
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
+	fullURL := string(body)
 	// получаем токен
 	token, err := GetToken(r)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 	}
-	// получаем короткий ключ
-	shortKey, err := h.service.CreateShortKey(string(body), token)
-	if err != nil {
+	// получаем короткий идентификатор ссылки
+	shortKey, err := h.service.CreateShortKey(fullURL, token)
+	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+		// если ошибка дубликации урл
+		StatusCode = http.StatusConflict
+		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	} else {
+		StatusCode = http.StatusCreated
 	}
 	// собираем сокращенную ссылку и пишем в тело
 	shortURL, err := h.createLink(shortKey)
@@ -79,7 +88,7 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(StatusCode)
 	w.Write([]byte(shortURL))
 }
 
@@ -96,7 +105,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST записывает сокращенный идентификатор и полный урл в хранилище
-func (h *Handlers) userIDHandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request) {
+func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -122,12 +131,14 @@ func (h *Handlers) userIDHandlerAPIShortenBatch(w http.ResponseWriter, r *http.R
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 	}
+	// получаем идентификаторы ссылок записанные в базу
 	shortKeys, err := h.service.SetBatchURLs(batch, token)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
 		return
 	}
+	// собираем структуру для вывода
 	batchOut := make(data.APIShortenBatchOutput, len(shortKeys))
 	for i, key := range shortKeys {
 		batchOut[i].CorrelationID = key
@@ -138,7 +149,7 @@ func (h *Handlers) userIDHandlerAPIShortenBatch(w http.ResponseWriter, r *http.R
 		}
 		batchOut[i].ShortURL = fullURL
 	}
-
+	// пишем ответ в json формате
 	result, err := json.Marshal(batchOut)
 	if err != nil {
 		log.Println(err)
@@ -152,6 +163,7 @@ func (h *Handlers) userIDHandlerAPIShortenBatch(w http.ResponseWriter, r *http.R
 
 // POST возвращает сокращенный URL в json формате
 func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
+	StatusCode := 0
 	// читаем запрос
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -162,6 +174,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
+	// парсим входные данные
 	inputData := data.APIShortenInput{}
 	err = json.Unmarshal(body, &inputData)
 	if err != nil {
@@ -173,13 +186,20 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
+		return
 	}
 	// получаем созданный короткий ключ для URL
 	shortKey, err := h.service.CreateShortKey(inputData.URL, token)
-	if err != nil {
+	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+		// если ошибка дубликации урл
+		StatusCode = http.StatusConflict
+		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	} else {
+		StatusCode = http.StatusCreated
 	}
 	// собираем короткую ссылку
 	shortURL, err := h.createLink(shortKey)
@@ -197,7 +217,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(StatusCode)
 	w.Write(result)
 }
 

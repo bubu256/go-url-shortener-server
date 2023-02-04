@@ -162,6 +162,5 @@ func (s *Shortener) GetURL(shortKey string) (string, bool) {
 }
 
 func (s *Shortener) GetAllURLs(tokenID string) map[string]string {
-	// result := make(map[string]string)
 	return s.db.GetAllURLs(tokenID)
 }
