@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -29,35 +28,20 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	// "host=localhost port=5432 user=postgres password=myPassword dbname=postgres sslmode=disable"
-	log.Println(cfg.DataBaseDSN)
-	dsn := strings.Split(cfg.DataBaseDSN, " ")
+	log.Println("", cfg.DataBaseDSN)
 
 	m, err := migrate.New(
 		"file://db_migrate",
-		// "postgres://user:password@host:port/db_name?sslmode=disable")
-		fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", dsn[2][5:], dsn[3][9:], dsn[0][5:], dsn[1][5:], dsn[4][7:], dsn[5][8:]),
+		cfg.DataBaseDSN,
 	)
 	if err != nil {
-		log.Println("Не удалось подключиться к БД")
-		log.Fatal(err)
+		log.Println("Не удалось подключиться к БД;", err)
+		return nil, err
 	}
 	defer m.Close()
 	if err := m.Up(); err != nil {
 		log.Printf("Миграции не применены; %v", err)
 	}
-
-	// ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	// defer cancel()
-	// query := `CREATE TABLE IF NOT EXISTS urls(
-	// 	short_id CHAR(50) PRIMARY KEY NOT NULL,
-	// 	full_url TEXT UNIQUE,
-	// 	user_id CHAR(72) NOt NULL
-	// );`
-	// _, err = db.ExecContext(ctx, query)
-	// if err != nil {
-	// 	log.Println(err)
-	// }
 
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
 }
