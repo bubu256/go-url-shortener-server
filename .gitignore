@@ -25,3 +25,4 @@ vendor/
 # and
 test.storage
 command.txt
+.env
