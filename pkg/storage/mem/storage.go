@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 )
 
 // хранилище реализованное с mutex
@@ -35,7 +35,7 @@ func (s *MapDBMutex) Ping() error {
 	return nil
 }
 
-func (s *MapDBMutex) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
 		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token)

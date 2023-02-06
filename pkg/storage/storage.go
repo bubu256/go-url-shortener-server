@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/mem"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/postgres"
 )
@@ -18,7 +18,7 @@ type Storage interface {
 	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
 	Ping() error
-	SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error)
+	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
@@ -76,7 +76,7 @@ func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
 }
 
-func (s *WrapToSaveFile) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	return s.storage.SetBatchURLs(batch, token)
 }
 

@@ -10,8 +10,8 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 	"github.com/jackc/pgerrcode"
 )
 
@@ -40,7 +40,7 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
 }
 
-func (p *PDStore) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()

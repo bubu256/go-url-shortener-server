@@ -11,8 +11,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -118,7 +118,7 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// парсим json
-	batch := data.APIShortenBatchInput{}
+	batch := schema.APIShortenBatchInput{}
 	err = json.Unmarshal(body, &batch)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -139,7 +139,7 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 		return
 	}
 	// собираем структуру для вывода
-	batchOut := make(data.APIShortenBatchOutput, len(shortKeys))
+	batchOut := make(schema.APIShortenBatchOutput, len(shortKeys))
 	for i, key := range shortKeys {
 		batchOut[i].CorrelationID = key
 		fullURL, err := h.createLink(key)
@@ -175,7 +175,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// парсим входные данные
-	inputData := data.APIShortenInput{}
+	inputData := schema.APIShortenInput{}
 	err = json.Unmarshal(body, &inputData)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
@@ -209,7 +209,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// пишем ответ
-	output := data.APIShortenOutput{Result: shortURL}
+	output := schema.APIShortenOutput{Result: shortURL}
 	result, err := json.Marshal(output)
 	if err != nil {
 		log.Println(err)
@@ -234,7 +234,7 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	outUrls := make(data.APIUserURLs, len(allURLs))
+	outUrls := make(schema.APIUserURLs, len(allURLs))
 	i := 0
 	for k, v := range allURLs {
 		shortURL, err := h.createLink(k)

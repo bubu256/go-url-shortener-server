@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 )
 
@@ -71,7 +71,7 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	return &NewSh
 }
 
-func (s *Shortener) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (s *Shortener) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	return s.db.SetBatchURLs(batch, token)
 }
 
