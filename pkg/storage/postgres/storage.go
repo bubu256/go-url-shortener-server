@@ -30,6 +30,7 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 		return nil, err
 	}
 	// "host=localhost port=5432 user=postgres password=myPassword dbname=postgres sslmode=disable"
+	log.Println(cfg.DataBaseDSN)
 	dsn := strings.Split(cfg.DataBaseDSN, " ")
 
 	m, err := migrate.New(

@@ -17,5 +17,6 @@ func main() {
 	dataStorage := storage.New(cfg.DB, nil)
 	service := shortener.New(dataStorage, cfg.Service)
 	handler := handlers.New(service, cfg.Server)
+	log.Println("Сервер:", cfg.Server.ServerAddress)
 	log.Fatal(http.ListenAndServe(cfg.Server.ServerAddress, handler.Router))
 }
