@@ -24,3 +24,6 @@ vendor/
 
 # and
 test.storage
+command.txt
+.env
+docker-compose.yml

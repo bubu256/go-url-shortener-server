@@ -15,7 +15,7 @@ func main() {
 	cfg.LoadFromFlag() // загрузка параметров из флагов запуска или значения по умолчанию
 	cfg.LoadFromEnv()  // загрузка параметров из переменных окружения
 	dataStorage := storage.New(cfg.DB, nil)
-	service := shortener.New(dataStorage)
+	service := shortener.New(dataStorage, cfg.Service)
 	handler := handlers.New(service, cfg.Server)
 	log.Fatal(http.ListenAndServe(cfg.Server.ServerAddress, handler.Router))
 }

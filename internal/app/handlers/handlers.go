@@ -4,11 +4,15 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
+	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -21,15 +25,6 @@ type Handlers struct {
 	baseURL string
 }
 
-// структура для принятия данных в запросе из json
-type InputData struct {
-	URL string `json:"url"`
-}
-
-type OutputData struct {
-	Result string `json:"result"`
-}
-
 func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	if service == nil {
 		log.Fatal("указатель на структуру shortener.Shortener должен быть != nil;")
@@ -37,26 +32,54 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	NewHandlers := Handlers{baseURL: cfgServer.BaseURL}
 	NewHandlers.service = service
 	router := chi.NewRouter()
-	router.Use(gzipWriter, gzipReader)
+	router.Use(gzipWriter, gzipReader, NewHandlers.TokenHandler)
 	router.Post("/", NewHandlers.HandlerURLtoShort)
-	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
+	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
+	router.Get("/api/user/urls", NewHandlers.HandlerAPIUserAllURLs)
+	router.Post("/api/shorten/batch", NewHandlers.HandlerAPIShortenBatch)
+	router.Get("/ping", NewHandlers.HandlerPing)
 	NewHandlers.Router = router
 	return &NewHandlers
 }
 
+// GET пингует базу данных
+func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
+	err := h.service.PingDB()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // обработчик Post запросов, возвращает сокращенный URL в теле ответа
 func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
+	StatusCode := 0
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
-	shortKey, err := h.service.CreateShortKey(string(body))
+	fullURL := string(body)
+	// получаем токен
+	token, err := GetToken(r)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+	}
+	// получаем короткий идентификатор ссылки
+	shortKey, err := h.service.CreateShortKey(fullURL, token)
+	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+		// если ошибка дубликации урл
+		StatusCode = http.StatusConflict
+		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	} else {
+		StatusCode = http.StatusCreated
 	}
 	// собираем сокращенную ссылку и пишем в тело
 	shortURL, err := h.createLink(shortKey)
@@ -65,7 +88,7 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(StatusCode)
 	w.Write([]byte(shortURL))
 }
 
@@ -81,7 +104,67 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// POST записывает сокращенный идентификатор и полный урл в хранилище
+func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Content-Type") != "application/json" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	// читаем тело
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println("не удалось прочитать body;")
+		return
+	}
+	// парсим json
+	batch := data.APIShortenBatchInput{}
+	err = json.Unmarshal(body, &batch)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		log.Println("не удалось декодировать json;")
+		return
+	}
+	// получаем токен
+	token, err := GetToken(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+	}
+	// получаем идентификаторы ссылок записанные в базу
+	shortKeys, err := h.service.SetBatchURLs(batch, token)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+	// собираем структуру для вывода
+	batchOut := make(data.APIShortenBatchOutput, len(shortKeys))
+	for i, key := range shortKeys {
+		batchOut[i].CorrelationID = key
+		fullURL, err := h.createLink(key)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		batchOut[i].ShortURL = fullURL
+	}
+	// пишем ответ в json формате
+	result, err := json.Marshal(batchOut)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	w.Write(result)
+}
+
+// POST возвращает сокращенный URL в json формате
 func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
+	StatusCode := 0
+	// читаем запрос
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -91,33 +174,88 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
 		return
 	}
-	inputData := InputData{}
+	// парсим входные данные
+	inputData := data.APIShortenInput{}
 	err = json.Unmarshal(body, &inputData)
 	if err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	shortKey, err := h.service.CreateShortKey(inputData.URL)
+	// получаем токен
+	token, err := GetToken(r)
 	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+	// получаем созданный короткий ключ для URL
+	shortKey, err := h.service.CreateShortKey(inputData.URL, token)
+	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+		// если ошибка дубликации урл
+		StatusCode = http.StatusConflict
+		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
+	} else {
+		StatusCode = http.StatusCreated
 	}
+	// собираем короткую ссылку
 	shortURL, err := h.createLink(shortKey)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	outputData := OutputData{Result: shortURL}
-	result, err := json.Marshal(outputData)
+	// пишем ответ
+	output := data.APIShortenOutput{Result: shortURL}
+	result, err := json.Marshal(output)
 	if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(StatusCode)
+	w.Write(result)
+}
+
+// GET возвращает пользователю все его сокращенные и полные URL в json формате
+func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request) {
+	token, err := GetToken(r)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+	}
+	// запрашиваем мапу со всеми url пользователя
+	allURLs := h.service.GetAllURLs(token)
+	if len(allURLs) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	outUrls := make(data.APIUserURLs, len(allURLs))
+	i := 0
+	for k, v := range allURLs {
+		shortURL, err := h.createLink(k)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		outUrls[i].ShortURL = shortURL
+		outUrls[i].OriginalURL = v
+		i++
+	}
+
+	result, err := json.Marshal(outUrls)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	w.Write(result)
 }
 
@@ -134,6 +272,28 @@ type newWriter struct {
 
 func (w newWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
+}
+
+// Middleware функция проверяет и выдает токен в куках для аутентификации
+func (h *Handlers) TokenHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token, err := r.Cookie("token")
+		if err != nil || !h.service.CheckToken(token.Value) {
+			newToken, err := h.service.GenerateNewToken()
+			if err != nil {
+				log.Println("ошибка при генерации токена;", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			// ставим новые куки и в ответ и в запрос
+			cookie := &http.Cookie{Name: "token", Value: newToken, Path: "/"}
+			http.SetCookie(w, cookie)
+			// token.Value = newToken // меняем в request значение токена на новый
+			// r.Cookies()
+			r.AddCookie(cookie) // это не работает
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
@@ -185,4 +345,19 @@ func gzipReader(next http.Handler) http.Handler {
 		r.Body = gzReader
 		next.ServeHTTP(w, r)
 	})
+}
+
+// добываем последний cookie token (если токен был не верный, то был выдан новый и он последний, его и берем)
+func GetToken(r *http.Request) (string, error) {
+	cookies := r.Cookies()
+	cookie := new(http.Cookie)
+	for _, c := range cookies {
+		if c.Name == "token" {
+			cookie = c
+		}
+	}
+	if cookie == nil {
+		return "", errors.New("токен не найден;")
+	}
+	return cookie.Value, nil
 }

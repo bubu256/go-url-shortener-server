@@ -7,18 +7,31 @@ import (
 	"os"
 
 	"github.com/bubu256/go-url-shortener-server/config"
+	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/mem"
+	"github.com/bubu256/go-url-shortener-server/pkg/storage/postgres"
 )
 
 type Storage interface {
 	GetURL(key string) (string, bool)
-	SetNewURL(key string, URL string) error
+	GetAllURLs(userID string) map[string]string
+	SetNewURL(key, URL, tokenID string) error
 	GetLastID() (int64, bool)
+	Ping() error
+	SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error)
 }
 
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
-	// создаем базовый Storage
-	newStorage := mem.NewMapDB(cfgDB, initData)
+	if cfgDB.DataBaseDSN != "" {
+		db, err := postgres.New(cfgDB)
+		if err == nil {
+			return db
+		}
+		log.Println(err)
+	}
+	// создаем базовый Storage mem
+	newStorage := mem.NewMapDBMutex(cfgDB, initData)
+	// log.Printf("%v", newStorage)
 	// если указан путь к файлу создаем Storage с чтением/записью в файл
 	if cfgDB.FileStoragePath != "" {
 		fileStorage, err := NewWrapToSaveFile(cfgDB.FileStoragePath, newStorage)
@@ -35,16 +48,16 @@ type WrapToSaveFile struct {
 	file    *RWFile
 }
 
-func (s *WrapToSaveFile) SetNewURL(key string, URL string) error {
+func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string) error {
 	// пишем в файл и вызываем стандартный обработчик
 	err := s.file.OpenAppend()
 	if err != nil {
 		return err
 	}
 	defer s.file.Close()
-	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL})
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID})
 
-	return s.storage.SetNewURL(key, URL)
+	return s.storage.SetNewURL(key, URL, TokenID)
 }
 
 func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
@@ -53,6 +66,18 @@ func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
 
 func (s *WrapToSaveFile) GetLastID() (int64, bool) {
 	return s.storage.GetLastID()
+}
+
+func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
+	return s.storage.GetAllURLs(userID)
+}
+
+func (s *WrapToSaveFile) Ping() error {
+	return s.storage.Ping()
+}
+
+func (s *WrapToSaveFile) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+	return s.storage.SetBatchURLs(batch, token)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
@@ -68,7 +93,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	match, err := file.ReadMatch()
 	for err == nil {
 		countRead++
-		st.SetNewURL(match.ShortKey, match.FullURL)
+		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID)
 		match, err = file.ReadMatch()
 	}
 	if err != io.EOF {
@@ -83,6 +108,7 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 type Match struct {
 	ShortKey string `json:"short_key"`
 	FullURL  string `json:"full_url"`
+	UserID   string `json:"user_id"`
 }
 
 // структура для работы с файлом
