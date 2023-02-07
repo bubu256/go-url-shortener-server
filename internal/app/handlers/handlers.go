@@ -55,7 +55,7 @@ func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
 
 // обработчик Post запросов, возвращает сокращенный URL в теле ответа
 func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
-	StatusCode := 0
+	StatusCode := http.StatusCreated
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Не удалось прочитать тело POST запроса.", http.StatusInternalServerError)
@@ -79,8 +79,6 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else {
-		StatusCode = http.StatusCreated
 	}
 	// собираем сокращенную ссылку и пишем в тело
 	shortURL, err := h.createLink(shortKey)
@@ -131,6 +129,7 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Println(err)
+		return
 	}
 	// получаем идентификаторы ссылок записанные в базу
 	shortKeys, err := h.service.SetBatchURLs(batch, token)
@@ -164,7 +163,7 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 
 // POST возвращает сокращенный URL в json формате
 func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
-	StatusCode := 0
+	StatusCode := http.StatusCreated
 	// читаем запрос
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -200,8 +199,6 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
-	} else {
-		StatusCode = http.StatusCreated
 	}
 	// собираем короткую ссылку
 	shortURL, err := h.createLink(shortKey)
