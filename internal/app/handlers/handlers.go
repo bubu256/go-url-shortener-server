@@ -70,10 +70,11 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 	}
 	// получаем короткий идентификатор ссылки
 	shortKey, err := h.service.CreateShortKey(fullURL, token)
-	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+	var errDuplicate *errorapp.URLDuplicateError
+	if errors.As(err, &errDuplicate) {
 		// если ошибка дубликации урл
 		StatusCode = http.StatusConflict
-		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+		shortKey = errDuplicate.ExistsKey
 	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -190,10 +191,11 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	}
 	// получаем созданный короткий ключ для URL
 	shortKey, err := h.service.CreateShortKey(inputData.URL, token)
-	if errors.Is(err, &errorapp.URLDuplicateError{}) {
+	var errDuplicate *errorapp.URLDuplicateError
+	if errors.As(err, &errDuplicate) {
 		// если ошибка дубликации урл
 		StatusCode = http.StatusConflict
-		shortKey = err.(*errorapp.URLDuplicateError).ExistsKey
+		shortKey = errDuplicate.ExistsKey
 	} else if err != nil {
 		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
