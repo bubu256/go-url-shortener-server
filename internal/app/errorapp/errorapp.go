@@ -2,8 +2,11 @@
 package errorapp
 
 import (
+	"errors"
 	"fmt"
 )
+
+var ErrorPageNotAvailable error = errors.New("запрашиваемая страница больше не доступна;")
 
 type URLDuplicateError struct {
 	Err       error

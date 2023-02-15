@@ -92,15 +92,19 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 }
 
 // обработчик Get запросов, возвращает полный URL в заголовке ответа Location
+// router.Get "/{ShortKey}"
 func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "ShortKey")
-	fullURL, ok := h.service.GetURL(shortKey)
-	if ok {
-		w.Header().Set("Location", fullURL)
-		w.WriteHeader(http.StatusTemporaryRedirect)
-	} else {
+	fullURL, err := h.service.GetURL(shortKey)
+	if err != nil {
+		if err == errorapp.ErrorPageNotAvailable {
+			w.WriteHeader(http.StatusGone)
+		}
 		w.WriteHeader(http.StatusBadRequest)
+		return
 	}
+	w.Header().Set("Location", fullURL)
+	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
 // POST записывает сокращенный идентификатор и полный урл в хранилище

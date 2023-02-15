@@ -2,6 +2,7 @@ package storage
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"os"
@@ -13,9 +14,9 @@ import (
 )
 
 type Storage interface {
-	GetURL(key string) (string, bool)
+	GetURL(key string) (string, error)
 	GetAllURLs(userID string) map[string]string
-	SetNewURL(key, URL, tokenID string) error
+	SetNewURL(key, URL, tokenID string, available bool) error
 	GetLastID() (int64, bool)
 	Ping() error
 	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
@@ -48,19 +49,19 @@ type WrapToSaveFile struct {
 	file    *RWFile
 }
 
-func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string) error {
+func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string, available bool) error {
 	// пишем в файл и вызываем стандартный обработчик
 	err := s.file.OpenAppend()
 	if err != nil {
 		return err
 	}
 	defer s.file.Close()
-	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID})
+	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID, Available: &available})
 
-	return s.storage.SetNewURL(key, URL, TokenID)
+	return s.storage.SetNewURL(key, URL, TokenID, available)
 }
 
-func (s *WrapToSaveFile) GetURL(key string) (string, bool) {
+func (s *WrapToSaveFile) GetURL(key string) (string, error) {
 	return s.storage.GetURL(key)
 }
 
@@ -93,7 +94,10 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	match, err := file.ReadMatch()
 	for err == nil {
 		countRead++
-		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID)
+		if match.Available == nil {
+			return nil, errors.New("match.Available == nil, хотя должен быть true od false")
+		}
+		st.SetNewURL(match.ShortKey, match.FullURL, match.UserID, *(match.Available))
 		match, err = file.ReadMatch()
 	}
 	if err != io.EOF {
@@ -105,10 +109,13 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 }
 
 // структура для сериализации данных
+// Match.Available *bool я использую тут указатель что бы можно было отследить
+// отсутствие поля и установить значение по умолчанию true
 type Match struct {
-	ShortKey string `json:"short_key"`
-	FullURL  string `json:"full_url"`
-	UserID   string `json:"user_id"`
+	ShortKey  string `json:"short_key"`
+	FullURL   string `json:"full_url"`
+	UserID    string `json:"user_id"`
+	Available *bool  `json:"available"` // default true
 }
 
 // структура для работы с файлом
@@ -140,6 +147,10 @@ func (r *RWFile) ReadMatch() (*Match, error) {
 	err := r.decoder.Decode(&match)
 	if err != nil {
 		return nil, err
+	}
+	if match.Available == nil {
+		defaultTrue := true
+		match.Available = &defaultTrue
 	}
 	return &match, nil
 }

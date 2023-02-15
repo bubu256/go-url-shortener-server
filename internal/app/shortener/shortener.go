@@ -125,10 +125,12 @@ func (s *Shortener) getNewKey() string {
 	if id < 0 {
 		id = -id
 	}
+	// тут твориться магия по заполнению слайса с конца.
+	// это работает быстрее чем заполнение слайса обычном методом и потом его разворот
 	baseSize := 6
 	codeByte := make([]byte, baseSize)
 	// кодируем id в базовые символы. заполняем слайс с конца.
-	i := 0
+	i := 0 // используется как метка сколько байт было записано, нужна для возврата значения
 	for res := id; res > 0; res /= baseKey {
 		i++
 		index := res % baseKey
@@ -150,14 +152,14 @@ func (s *Shortener) getNewKey() string {
 // возвращает короткий ключ; полный URL сохраняет в хранилище
 func (s *Shortener) CreateShortKey(fullURL, tokenID string) (shortKey string, err error) {
 	key := s.getNewKey()
-	err = s.db.SetNewURL(key, fullURL, tokenID)
+	err = s.db.SetNewURL(key, fullURL, tokenID, true)
 	if err != nil {
 		return "", err
 	}
 	return key, nil
 }
 
-func (s *Shortener) GetURL(shortKey string) (string, bool) {
+func (s *Shortener) GetURL(shortKey string) (string, error) {
 	return s.db.GetURL(shortKey)
 }
 

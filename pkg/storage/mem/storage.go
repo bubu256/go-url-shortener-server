@@ -14,6 +14,7 @@ import (
 type MapDBMutex struct {
 	keyToURL         map[string]string
 	userToKeys       map[string][]string
+	keyAvailable     map[string]bool
 	connectingString string
 	mutex            sync.Mutex
 }
@@ -22,8 +23,9 @@ func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBM
 	NewStorage := MapDBMutex{connectingString: cfgDB.DataBaseDSN}
 	NewStorage.keyToURL = make(map[string]string)
 	NewStorage.userToKeys = make(map[string][]string)
+	NewStorage.keyAvailable = make(map[string]bool)
 	for k, v := range initData {
-		NewStorage.SetNewURL(k, v, "")
+		NewStorage.SetNewURL(k, v, "", true)
 	}
 	return &NewStorage
 }
@@ -38,7 +40,7 @@ func (s *MapDBMutex) Ping() error {
 func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
-		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token)
+		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token, true)
 		if err != nil {
 			continue
 		}
@@ -48,13 +50,16 @@ func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token strin
 }
 
 // возвращает полный URL по ключу
-func (s *MapDBMutex) GetURL(key string) (string, bool) {
+func (s *MapDBMutex) GetURL(key string) (string, error) {
 	fullURL, ok := s.keyToURL[key]
 	if !ok {
-		return "", ok
+		return "", errors.New("short key missing in mem storage;")
+	}
+	if !s.keyAvailable[key] {
+		return "", errorapp.ErrorPageNotAvailable
 	}
 
-	return fullURL, true
+	return fullURL, nil
 }
 
 func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
@@ -65,7 +70,7 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 	}
 	for _, k := range keys {
 		fullURL, ok := s.keyToURL[k]
-		if ok {
+		if ok && s.keyAvailable[k] {
 			result[k] = fullURL
 		}
 	}
@@ -73,7 +78,7 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 }
 
 // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
-func (s *MapDBMutex) SetNewURL(key, URL, tokenID string) error {
+func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
 	// проверяем существует ли урл
 	// наверное это очень дорогая операция для проверки на дупликацию урл, но как лучше пока не знаю
 	for existKey, fullURL := range s.keyToURL {
@@ -89,6 +94,7 @@ func (s *MapDBMutex) SetNewURL(key, URL, tokenID string) error {
 	defer s.mutex.Unlock()
 	s.keyToURL[key] = URL
 	s.userToKeys[tokenID] = append(s.userToKeys[tokenID], key)
+	s.keyAvailable[key] = available
 	return nil
 }
 

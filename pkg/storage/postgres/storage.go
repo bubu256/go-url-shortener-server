@@ -39,8 +39,8 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 		return nil, err
 	}
 	defer m.Close()
-	if err := m.Up(); err != nil {
-		log.Printf("Миграции не применены; %v", err)
+	if err := m.Up(); err == nil {
+		log.Printf("Миграция применена к БД; %v", m)
 	}
 
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
@@ -81,27 +81,32 @@ func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) 
 	return result, nil
 }
 
-func (p *PDStore) GetURL(key string) (string, bool) {
+func (p *PDStore) GetURL(key string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "select full_url from urls where short_id = $1"
+	query := "select full_url, available from urls where short_id = $1"
 	row := p.db.QueryRowContext(ctx, query, key)
 	if err := row.Err(); err != nil {
 		log.Println(err)
-		return "", false
+		return "", err
 	}
 	fullURL := ""
-	if row.Scan(&fullURL) != nil {
-		return "", false
+	available := false
+	err := row.Scan(&fullURL, &available)
+	if err != nil {
+		return "", err
 	}
-	return fullURL, true
+	if available == false {
+		return "", errorapp.ErrorPageNotAvailable
+	}
+	return fullURL, nil
 }
 
 func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	result := make(map[string]string)
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "select short_id, full_url from urls where user_id = $1"
+	query := "select short_id, full_url, available from urls where user_id = $1"
 	rows, err := p.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		log.Println(err)
@@ -110,11 +115,15 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 
 	short := ""
 	full := ""
+	available := false
 	for rows.Next() {
-		if rows.Scan(&short, &full) != nil {
+		if rows.Scan(&short, &full, &available) != nil {
 			return result
 		}
-		// очень странно что тут появляются лишние проблемы у short
+		if available == false {
+			continue
+		}
+		// до сих пор не понимаю почему тут появляются лишние проблемы у short
 		// когда ответ однострочный такой проблемы нет
 		result[strings.TrimSpace(short)] = full
 	}
@@ -124,11 +133,11 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	return result
 }
 
-func (p *PDStore) SetNewURL(key, URL, tokenID string) error {
+func (p *PDStore) SetNewURL(key, URL, tokenID string, available bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "INSERT INTO urls (short_id, full_url, user_id) VALUES ($1, $2, $3)"
-	_, err := p.db.ExecContext(ctx, query, key, URL, tokenID)
+	query := "INSERT INTO urls (short_id, full_url, user_id, available) VALUES ($1, $2, $3, $4)"
+	_, err := p.db.ExecContext(ctx, query, key, URL, tokenID, available)
 	if err != nil && strings.Contains(err.Error(), pgerrcode.UniqueViolation) {
 		query := "select short_id from urls where full_url = $1 "
 		var key string
