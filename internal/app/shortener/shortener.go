@@ -5,6 +5,7 @@ import (
 	crand "crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math/rand"
 	"sync/atomic"
@@ -73,6 +74,13 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 
 func (s *Shortener) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	return s.db.SetBatchURLs(batch, token)
+}
+
+func (s *Shortener) DeleteBatch(batchShortKeys []string, token string) {
+	err := s.db.DeleteBatch(batchShortKeys, token)
+	if err != nil {
+		log.Println(fmt.Errorf("сервис получил ошибку при удалении данных из БД; %w", err))
+	}
 }
 
 // пингует ДБ

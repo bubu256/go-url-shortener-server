@@ -9,6 +9,7 @@ require (
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa
 	github.com/jackc/pgx/v5 v5.2.0
 	github.com/stretchr/testify v1.8.1
+	golang.org/x/exp v0.0.0-20230213192124-5e25df0256eb
 )
 
 require (

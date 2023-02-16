@@ -81,6 +81,33 @@ func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) 
 	return result, nil
 }
 
+func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	qwr := `UPDATE urls 
+	SET full_url = short_id||'_deleted='||full_url,
+	available = FALSE 
+	WHERE user_id = $1 and short_id = $2 and available = TRUE
+	`
+	stmt, err := tx.PrepareContext(ctx, qwr)
+	if err != nil {
+		return err
+	}
+	for _, key := range batchShortKeys {
+		_, err = stmt.ExecContext(ctx, token, key)
+		if err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 func (p *PDStore) GetURL(key string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()

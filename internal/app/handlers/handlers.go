@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -37,6 +38,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	router.Get("/{ShortKey}", NewHandlers.HandlerShortToURL)
 	router.Post("/api/shorten", NewHandlers.HandlerAPIShorten)
 	router.Get("/api/user/urls", NewHandlers.HandlerAPIUserAllURLs)
+	router.Delete("/api/user/urls", NewHandlers.HandlerAPIDeleteUrls)
 	router.Post("/api/shorten/batch", NewHandlers.HandlerAPIShortenBatch)
 	router.Get("/ping", NewHandlers.HandlerPing)
 	NewHandlers.Router = router
@@ -260,6 +262,30 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(result)
+}
+
+// router.Delete("/api/user/urls", NewHandlers.HandlerAPIDeleteUrls)
+func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) {
+	token, err := GetToken(r)
+	if err != nil {
+		log.Println(fmt.Errorf("при получении токена в HandlerAPIDeleteUrls произошла ошибка; %w", err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	batchShortUrls := []string{}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Println(fmt.Errorf("в HandlerAPIDeleteUrls при чтении тела запроса произошла ошибка; %w", err))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	err = json.Unmarshal(body, &batchShortUrls)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	h.service.DeleteBatch(batchShortUrls, token)
+	w.WriteHeader(http.StatusAccepted)
 }
 
 // функция принимает ключ и возвращает короткую ссылку на основе Handlers.baseURL

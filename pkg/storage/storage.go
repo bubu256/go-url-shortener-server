@@ -3,6 +3,7 @@ package storage
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -17,6 +18,7 @@ type Storage interface {
 	GetURL(key string) (string, error)
 	GetAllURLs(userID string) map[string]string
 	SetNewURL(key, URL, tokenID string, available bool) error
+	DeleteBatch(batchShortKeys []string, token string) error
 	GetLastID() (int64, bool)
 	Ping() error
 	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
@@ -50,15 +52,40 @@ type WrapToSaveFile struct {
 }
 
 func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string, available bool) error {
-	// пишем в файл и вызываем стандартный обработчик
-	err := s.file.OpenAppend()
+	// вызываем базовый обработчик
+	err := s.storage.SetNewURL(key, URL, TokenID, available)
 	if err != nil {
 		return err
 	}
+	// пишем в файл
+	err = s.file.OpenAppend()
+	if err != nil {
+		return fmt.Errorf("после записи урл в памяти, не удалось открыть файл для записи; %w", err)
+	}
 	defer s.file.Close()
 	s.file.WriteMatch(Match{ShortKey: key, FullURL: URL, UserID: TokenID, Available: &available})
+	return nil
+}
 
-	return s.storage.SetNewURL(key, URL, TokenID, available)
+func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
+	result := make([]string, 0, len(batch))
+	for _, elem := range batch {
+		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token, true)
+		if err != nil {
+			continue
+		}
+		result = append(result, elem.CorrelationID)
+	}
+	return result, nil
+}
+
+func (s *WrapToSaveFile) DeleteBatch(batchShortKeys []string, token string) error {
+	err := s.storage.DeleteBatch(batchShortKeys, token)
+	if err != nil {
+		return err
+	}
+	// тут надо добавить код полной перезаписи файла чтобы актуализировать данные
+	return nil
 }
 
 func (s *WrapToSaveFile) GetURL(key string) (string, error) {
@@ -75,10 +102,6 @@ func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 
 func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
-}
-
-func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
-	return s.storage.SetBatchURLs(batch, token)
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
