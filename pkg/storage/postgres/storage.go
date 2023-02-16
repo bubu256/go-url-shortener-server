@@ -123,7 +123,7 @@ func (p *PDStore) GetURL(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if available == false {
+	if !available {
 		return "", errorapp.ErrorPageNotAvailable
 	}
 	return fullURL, nil
@@ -147,7 +147,7 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 		if rows.Scan(&short, &full, &available) != nil {
 			return result
 		}
-		if available == false {
+		if !available {
 			continue
 		}
 		// до сих пор не понимаю почему тут появляются лишние проблемы у short
