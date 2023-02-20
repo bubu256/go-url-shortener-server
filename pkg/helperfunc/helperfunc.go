@@ -11,8 +11,8 @@ func FanInSliceString(chs ...chan []string) chan []string {
 			wg.Add(1)
 			go func(inCh <-chan []string) {
 				defer wg.Done()
-				for key_user := range inCh {
-					OutCh <- key_user
+				for keyUser := range inCh {
+					OutCh <- keyUser
 				}
 			}(ch)
 		}

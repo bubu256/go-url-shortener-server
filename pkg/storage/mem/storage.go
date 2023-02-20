@@ -53,11 +53,11 @@ func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token strin
 
 // помечает короткие урл как недоступные при условии что токен пользователя совпадает с создавшим урл
 func (s *MapDBMutex) DeleteBatch(chs []chan []string) error {
-	for key_user := range helperfunc.FanInSliceString(chs...) {
+	for keyUser := range helperfunc.FanInSliceString(chs...) {
 		s.mutex.Lock()
-		if slices.Contains(s.userToKeys[key_user[1]], key_user[0]) {
-			s.keyAvailable[key_user[0]] = false
-			s.keyToURL[key_user[0]] = key_user[0] + "_deleted=" + s.keyToURL[key_user[0]]
+		if slices.Contains(s.userToKeys[keyUser[1]], keyUser[0]) {
+			s.keyAvailable[keyUser[0]] = false
+			s.keyToURL[keyUser[0]] = keyUser[0] + "_deleted=" + s.keyToURL[keyUser[0]]
 		}
 		s.mutex.Unlock()
 	}

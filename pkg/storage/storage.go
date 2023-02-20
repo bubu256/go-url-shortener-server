@@ -95,20 +95,20 @@ func (s *WrapToSaveFile) DeleteBatch(chs []chan []string) error {
 		for i, ch := range chs {
 			// считываем каждый канал выполняем операцию и пишем с соответствующий дублирующий канал
 			go func(outCh chan<- []string, inCh <-chan []string) {
-				for key_user := range inCh {
-					key2fullURL := s.storage.GetAllURLs(key_user[1])
-					if fullURL, ok := key2fullURL[key_user[0]]; ok {
+				for keyUser := range inCh {
+					key2fullURL := s.storage.GetAllURLs(keyUser[1])
+					if fullURL, ok := key2fullURL[keyUser[0]]; ok {
 						err := s.file.OpenAppend()
 						if err == nil {
 							available := false
-							s.file.WriteMatch(Match{ShortKey: key_user[0],
-								FullURL:   key_user[0] + "_deleted=" + fullURL,
-								UserID:    key_user[1],
+							s.file.WriteMatch(Match{ShortKey: keyUser[0],
+								FullURL:   keyUser[0] + "_deleted=" + fullURL,
+								UserID:    keyUser[1],
 								Available: &available})
 							s.file.Close()
 						}
 					}
-					outCh <- key_user
+					outCh <- keyUser
 				}
 				close(outCh)
 			}(chsCopy[i], ch)

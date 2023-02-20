@@ -102,8 +102,8 @@ func (p *PDStore) DeleteBatch(inputChs []chan []string) error {
 	}
 
 	var errOut error
-	for key_user := range helperfunc.FanInSliceString(inputChs...) {
-		_, err = stmt.ExecContext(ctx, key_user[1], key_user[0])
+	for keyUser := range helperfunc.FanInSliceString(inputChs...) {
+		_, err = stmt.ExecContext(ctx, keyUser[1], keyUser[0])
 		if err != nil {
 			// если возникла ошибка мы все равно продолжаем вычитывать канал,
 			// чтобы он смог безопасно закрыться
