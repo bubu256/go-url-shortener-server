@@ -101,6 +101,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if err == errorapp.ErrorPageNotAvailable {
 			w.WriteHeader(http.StatusGone)
+			return
 		}
 		w.WriteHeader(http.StatusBadRequest)
 		return
@@ -284,7 +285,7 @@ func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) 
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	h.service.DeleteBatch(batchShortUrls, token)
+	go h.service.DeleteBatch(batchShortUrls, token)
 	w.WriteHeader(http.StatusAccepted)
 }
 

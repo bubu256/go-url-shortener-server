@@ -77,13 +77,28 @@ func (s *Shortener) SetBatchURLs(batch schema.APIShortenBatchInput, token string
 }
 
 func (s *Shortener) DeleteBatch(batchShortKeys []string, token string) {
-	err := s.db.DeleteBatch(batchShortKeys, token)
+	numCh := 4
+	inputChs := make([]chan []string, 0, numCh)
+	for i := 0; i < numCh; i++ {
+		inCh := make(chan []string)
+		inputChs = append(inputChs, inCh)
+	}
+	go func() {
+		for i, key := range batchShortKeys {
+			inputChs[i%numCh] <- []string{key, token}
+		}
+		for _, ch := range inputChs {
+			close(ch)
+		}
+	}()
+
+	err := s.db.DeleteBatch(inputChs)
 	if err != nil {
-		log.Println(fmt.Errorf("сервис получил ошибку при удалении данных из БД; %w", err))
+		log.Println(fmt.Errorf("сервис получил ошибку при удалении данных из хранилища; %w", err))
 	}
 }
 
-// пингует ДБ
+// пингует БД
 func (s *Shortener) PingDB() error {
 	return s.db.Ping()
 }

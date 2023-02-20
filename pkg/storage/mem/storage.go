@@ -8,6 +8,7 @@ import (
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
+	"github.com/bubu256/go-url-shortener-server/pkg/helperfunc"
 	"golang.org/x/exp/slices"
 )
 
@@ -51,14 +52,14 @@ func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token strin
 }
 
 // помечает короткие урл как недоступные при условии что токен пользователя совпадает с создавшим урл
-func (s *MapDBMutex) DeleteBatch(batchShortKeys []string, token string) error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-	for _, key := range batchShortKeys {
-		if slices.Contains(s.userToKeys[token], key) {
-			s.keyAvailable[key] = false
-			s.keyToURL[key] = key + "_deleted=" + s.keyToURL[key]
+func (s *MapDBMutex) DeleteBatch(chs []chan []string) error {
+	for key_user := range helperfunc.FanInSliceString(chs...) {
+		s.mutex.Lock()
+		if slices.Contains(s.userToKeys[key_user[1]], key_user[0]) {
+			s.keyAvailable[key_user[0]] = false
+			s.keyToURL[key_user[0]] = key_user[0] + "_deleted=" + s.keyToURL[key_user[0]]
 		}
+		s.mutex.Unlock()
 	}
 	return nil
 }
@@ -97,10 +98,10 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 
 // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
 func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
-	// проверяем существует ли урл
-	// наверное это очень дорогая операция для проверки на дупликацию урл, но как лучше пока не знаю
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	// проверяем существует ли урл
+	// наверное это очень дорогая операция для проверки на дупликацию урл, но как лучше пока не знаю
 	for existKey, fullURL := range s.keyToURL {
 		if fullURL == URL {
 			return errorapp.NewURLDuplicateError(

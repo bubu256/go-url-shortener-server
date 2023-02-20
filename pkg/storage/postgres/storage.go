@@ -12,6 +12,7 @@ import (
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
+	"github.com/bubu256/go-url-shortener-server/pkg/helperfunc"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -81,7 +82,8 @@ func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) 
 	return result, nil
 }
 
-func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
+// func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
+func (p *PDStore) DeleteBatch(inputChs []chan []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
 	tx, err := p.db.BeginTx(ctx, nil)
@@ -89,7 +91,6 @@ func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
 		return err
 	}
 	defer tx.Rollback()
-
 	qwr := `UPDATE urls 
 	SET full_url = short_id||'_deleted='||full_url,
 	available = FALSE 
@@ -99,12 +100,22 @@ func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
 	if err != nil {
 		return err
 	}
-	for _, key := range batchShortKeys {
-		_, err = stmt.ExecContext(ctx, token, key)
+
+	var errOut error
+	for key_user := range helperfunc.FanInSliceString(inputChs...) {
+		_, err = stmt.ExecContext(ctx, key_user[1], key_user[0])
 		if err != nil {
-			return err
+			// если возникла ошибка мы все равно продолжаем вычитывать канал,
+			// чтобы он смог безопасно закрыться
+			log.Println(err)
+			errOut = err
 		}
 	}
+	// Проверяем были ли ошибки
+	if errOut != nil {
+		return err
+	}
+
 	return tx.Commit()
 }
 

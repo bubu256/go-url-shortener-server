@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"sync"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
@@ -18,7 +19,8 @@ type Storage interface {
 	GetURL(key string) (string, error)
 	GetAllURLs(userID string) map[string]string
 	SetNewURL(key, URL, tokenID string, available bool) error
-	DeleteBatch(batchShortKeys []string, token string) error
+	// DeleteBatch(batchShortKeys []string, token string) error
+	DeleteBatch(inputChs []chan []string) error
 	GetLastID() (int64, bool)
 	Ping() error
 	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
@@ -79,12 +81,46 @@ func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token s
 	return result, nil
 }
 
-func (s *WrapToSaveFile) DeleteBatch(batchShortKeys []string, token string) error {
-	err := s.storage.DeleteBatch(batchShortKeys, token)
+func (s *WrapToSaveFile) DeleteBatch(chs []chan []string) error {
+	// т.к. это обертка над хранилищем
+	// придется читать каналы и писать в новые для след. хранилища
+
+	// слайс каналов для дублирования
+	chsCopy := make([]chan []string, 0, len(chs))
+	for i := 0; i < len(chs); i++ {
+		ch := make(chan []string)
+		chsCopy = append(chsCopy, ch)
+	}
+	go func() {
+		for i, ch := range chs {
+			// считываем каждый канал выполняем операцию и пишем с соответствующий дублирующий канал
+			go func(outCh chan<- []string, inCh <-chan []string) {
+				for key_user := range inCh {
+					key2fullURL := s.storage.GetAllURLs(key_user[1])
+					if fullURL, ok := key2fullURL[key_user[0]]; ok {
+						err := s.file.OpenAppend()
+						if err == nil {
+							available := false
+							s.file.WriteMatch(Match{ShortKey: key_user[0],
+								FullURL:   key_user[0] + "_deleted=" + fullURL,
+								UserID:    key_user[1],
+								Available: &available})
+							s.file.Close()
+						}
+					}
+					outCh <- key_user
+				}
+				close(outCh)
+			}(chsCopy[i], ch)
+		}
+
+	}()
+	// отдаем дублирующий канал дальше
+	err := s.storage.DeleteBatch(chsCopy)
 	if err != nil {
 		return err
 	}
-	// тут надо добавить код полной перезаписи файла чтобы актуализировать данные
+
 	return nil
 }
 
@@ -147,6 +183,7 @@ type RWFile struct {
 	file    *os.File
 	encoder *json.Encoder
 	decoder *json.Decoder
+	mu      sync.Mutex
 }
 
 // создает структуру с открытым файлом на чтение/запись и decoder, encoder
@@ -161,6 +198,8 @@ func NewRWFile(pathFile string) (*RWFile, error) {
 }
 
 func (r *RWFile) WriteMatch(match Match) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.encoder.Encode(match)
 }
 
