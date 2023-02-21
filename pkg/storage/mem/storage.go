@@ -6,24 +6,28 @@ import (
 	"sync"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
+	"github.com/bubu256/go-url-shortener-server/pkg/helperfunc"
+	"golang.org/x/exp/slices"
 )
 
 // хранилище реализованное с mutex
 type MapDBMutex struct {
 	keyToURL         map[string]string
 	userToKeys       map[string][]string
+	keyAvailable     map[string]bool
 	connectingString string
-	mutex            sync.Mutex
+	mutex            sync.RWMutex
 }
 
 func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBMutex {
 	NewStorage := MapDBMutex{connectingString: cfgDB.DataBaseDSN}
 	NewStorage.keyToURL = make(map[string]string)
 	NewStorage.userToKeys = make(map[string][]string)
+	NewStorage.keyAvailable = make(map[string]bool)
 	for k, v := range initData {
-		NewStorage.SetNewURL(k, v, "")
+		NewStorage.SetNewURL(k, v, "", true)
 	}
 	return &NewStorage
 }
@@ -35,10 +39,10 @@ func (s *MapDBMutex) Ping() error {
 	return nil
 }
 
-func (s *MapDBMutex) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
-		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token)
+		err := s.SetNewURL(elem.CorrelationID, elem.OriginalURL, token, true)
 		if err != nil {
 			continue
 		}
@@ -47,25 +51,45 @@ func (s *MapDBMutex) SetBatchURLs(batch data.APIShortenBatchInput, token string)
 	return result, nil
 }
 
+// помечает короткие урл как недоступные при условии что токен пользователя совпадает с создавшим урл
+func (s *MapDBMutex) DeleteBatch(chs []chan []string) error {
+	for keyUser := range helperfunc.FanInSliceString(chs...) {
+		s.mutex.Lock()
+		if slices.Contains(s.userToKeys[keyUser[1]], keyUser[0]) {
+			s.keyAvailable[keyUser[0]] = false
+			s.keyToURL[keyUser[0]] = keyUser[0] + "_deleted=" + s.keyToURL[keyUser[0]]
+		}
+		s.mutex.Unlock()
+	}
+	return nil
+}
+
 // возвращает полный URL по ключу
-func (s *MapDBMutex) GetURL(key string) (string, bool) {
+func (s *MapDBMutex) GetURL(key string) (string, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 	fullURL, ok := s.keyToURL[key]
 	if !ok {
-		return "", ok
+		return "", errors.New("short key missing in mem storage;")
+	}
+	if !s.keyAvailable[key] {
+		return "", errorapp.ErrorPageNotAvailable
 	}
 
-	return fullURL, true
+	return fullURL, nil
 }
 
 func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 	result := make(map[string]string)
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
 	keys, ok := s.userToKeys[userID]
 	if !ok {
 		return result
 	}
 	for _, k := range keys {
 		fullURL, ok := s.keyToURL[k]
-		if ok {
+		if ok && s.keyAvailable[k] {
 			result[k] = fullURL
 		}
 	}
@@ -73,7 +97,9 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 }
 
 // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
-func (s *MapDBMutex) SetNewURL(key, URL, tokenID string) error {
+func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
 	// проверяем существует ли урл
 	// наверное это очень дорогая операция для проверки на дупликацию урл, но как лучше пока не знаю
 	for existKey, fullURL := range s.keyToURL {
@@ -85,10 +111,9 @@ func (s *MapDBMutex) SetNewURL(key, URL, tokenID string) error {
 			)
 		}
 	}
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
 	s.keyToURL[key] = URL
 	s.userToKeys[tokenID] = append(s.userToKeys[tokenID], key)
+	s.keyAvailable[key] = available
 	return nil
 }
 

@@ -26,4 +26,3 @@ vendor/
 test.storage
 command.txt
 .env
-docker-compose.yml

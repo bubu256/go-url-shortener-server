@@ -10,8 +10,12 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/bubu256/go-url-shortener-server/config"
-	"github.com/bubu256/go-url-shortener-server/internal/app/data"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
+	"github.com/bubu256/go-url-shortener-server/pkg/helperfunc"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/jackc/pgerrcode"
 )
 
@@ -25,22 +29,25 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
-	defer cancel()
-	query := `CREATE TABLE IF NOT EXISTS urls(
-		short_id CHAR(50) PRIMARY KEY NOT NULL,
-		full_url TEXT UNIQUE,
-		user_id CHAR(72) NOt NULL
-	);`
-	_, err = db.ExecContext(ctx, query)
+	log.Println("", cfg.DataBaseDSN)
+
+	m, err := migrate.New(
+		"file://db_migrate",
+		cfg.DataBaseDSN,
+	)
 	if err != nil {
-		log.Println(err)
+		log.Println("Не удалось подключиться к БД;", err)
+		return nil, err
+	}
+	defer m.Close()
+	if err := m.Up(); err == nil {
+		log.Printf("Миграция применена к БД; %v", m)
 	}
 
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
 }
 
-func (p *PDStore) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([]string, error) {
+func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
@@ -75,27 +82,69 @@ func (p *PDStore) SetBatchURLs(batch data.APIShortenBatchInput, token string) ([
 	return result, nil
 }
 
-func (p *PDStore) GetURL(key string) (string, bool) {
+// func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
+func (p *PDStore) DeleteBatch(inputChs []chan []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "select full_url from urls where short_id = $1"
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	qwr := `UPDATE urls 
+	SET full_url = short_id||'_deleted='||full_url,
+	available = FALSE 
+	WHERE user_id = $1 and short_id = $2 and available = TRUE
+	`
+	stmt, err := tx.PrepareContext(ctx, qwr)
+	if err != nil {
+		return err
+	}
+
+	var errOut error
+	for keyUser := range helperfunc.FanInSliceString(inputChs...) {
+		_, err = stmt.ExecContext(ctx, keyUser[1], keyUser[0])
+		if err != nil {
+			// если возникла ошибка мы все равно продолжаем вычитывать канал,
+			// чтобы он смог безопасно закрыться
+			log.Println(err)
+			errOut = err
+		}
+	}
+	// Проверяем были ли ошибки
+	if errOut != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+func (p *PDStore) GetURL(key string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
+	defer cancel()
+	query := "select full_url, available from urls where short_id = $1"
 	row := p.db.QueryRowContext(ctx, query, key)
 	if err := row.Err(); err != nil {
 		log.Println(err)
-		return "", false
+		return "", err
 	}
 	fullURL := ""
-	if row.Scan(&fullURL) != nil {
-		return "", false
+	available := false
+	err := row.Scan(&fullURL, &available)
+	if err != nil {
+		return "", err
 	}
-	return fullURL, true
+	if !available {
+		return "", errorapp.ErrorPageNotAvailable
+	}
+	return fullURL, nil
 }
 
 func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	result := make(map[string]string)
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "select short_id, full_url from urls where user_id = $1"
+	query := "select short_id, full_url, available from urls where user_id = $1"
 	rows, err := p.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		log.Println(err)
@@ -104,11 +153,15 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 
 	short := ""
 	full := ""
+	available := false
 	for rows.Next() {
-		if rows.Scan(&short, &full) != nil {
+		if rows.Scan(&short, &full, &available) != nil {
 			return result
 		}
-		// очень странно что тут появляются лишние проблемы у short
+		if !available {
+			continue
+		}
+		// до сих пор не понимаю почему тут появляются лишние проблемы у short
 		// когда ответ однострочный такой проблемы нет
 		result[strings.TrimSpace(short)] = full
 	}
@@ -118,11 +171,11 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	return result
 }
 
-func (p *PDStore) SetNewURL(key, URL, tokenID string) error {
+func (p *PDStore) SetNewURL(key, URL, tokenID string, available bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
-	query := "INSERT INTO urls (short_id, full_url, user_id) VALUES ($1, $2, $3)"
-	_, err := p.db.ExecContext(ctx, query, key, URL, tokenID)
+	query := "INSERT INTO urls (short_id, full_url, user_id, available) VALUES ($1, $2, $3, $4)"
+	_, err := p.db.ExecContext(ctx, query, key, URL, tokenID, available)
 	if err != nil && strings.Contains(err.Error(), pgerrcode.UniqueViolation) {
 		query := "select short_id from urls where full_url = $1 "
 		var key string
