@@ -28,26 +28,3 @@ func (e *URLDuplicateError) Error() string {
 func (e *URLDuplicateError) Unwrap() error {
 	return e.Err
 }
-
-// func (e *URLDuplicateError) Is(target error) bool {
-// 	if target == nil {
-// 		return false
-// 	}
-// 	_, ok := target.(*URLDuplicateError)
-// 	if ok {
-// 		return true
-// 	}
-// 	// return false
-// 	// как правильно? Нужно самому распаковывать ошибки и проверять глубже как тут или это делает сам errors.Is(err, target)
-// 	unwrapErr := errors.Unwrap(target)
-// 	if unwrapErr != nil {
-// 		return e.Is(unwrapErr)
-// 	}
-// 	return false
-
-// }
-
-// func (e *URLDuplicateError) As(target interface{}) bool {
-// 	_, ok := target.(*URLDuplicateError)
-// 	return ok
-// }

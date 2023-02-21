@@ -99,7 +99,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "ShortKey")
 	fullURL, err := h.service.GetURL(shortKey)
 	if err != nil {
-		if err == errorapp.ErrorPageNotAvailable {
+		if errors.Is(err, errorapp.ErrorPageNotAvailable) {
 			w.WriteHeader(http.StatusGone)
 			return
 		}

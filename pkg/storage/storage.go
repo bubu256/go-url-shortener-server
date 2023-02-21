@@ -96,18 +96,7 @@ func (s *WrapToSaveFile) DeleteBatch(chs []chan []string) error {
 			// считываем каждый канал выполняем операцию и пишем с соответствующий дублирующий канал
 			go func(outCh chan<- []string, inCh <-chan []string) {
 				for keyUser := range inCh {
-					key2fullURL := s.storage.GetAllURLs(keyUser[1])
-					if fullURL, ok := key2fullURL[keyUser[0]]; ok {
-						err := s.file.OpenAppend()
-						if err == nil {
-							available := false
-							s.file.WriteMatch(Match{ShortKey: keyUser[0],
-								FullURL:   keyUser[0] + "_deleted=" + fullURL,
-								UserID:    keyUser[1],
-								Available: &available})
-							s.file.Close()
-						}
-					}
+					s.attemptSetAvailableFalse(keyUser[0], keyUser[1])
 					outCh <- keyUser
 				}
 				close(outCh)
@@ -138,6 +127,22 @@ func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 
 func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
+}
+
+// проставляем флаг недоступности если юзер == юзеру автору записи
+func (s *WrapToSaveFile) attemptSetAvailableFalse(key, user string) {
+	key2fullURL := s.storage.GetAllURLs(user)
+	if fullURL, ok := key2fullURL[key]; ok {
+		err := s.file.OpenAppend()
+		if err == nil {
+			available := false
+			s.file.WriteMatch(Match{ShortKey: key,
+				FullURL:   key + "_deleted=" + fullURL,
+				UserID:    user,
+				Available: &available})
+			s.file.Close()
+		}
+	}
 }
 
 // Возвращает Storage с на основе исходного (st) с возможность работать с файлом
