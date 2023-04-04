@@ -1,3 +1,4 @@
+// Пакет предоставляет структуру для работы сервиса сокращения ссылок.
 package shortener
 
 import (
@@ -16,18 +17,22 @@ import (
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 )
 
+// константы участвующие в создании короткой ссылки
 const (
 	// символы для короткого ключа
 	basicSymbols = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	baseKey      = len(basicSymbols)
 )
 
+// CounterID - структура хранящая последний выданный ID короткого идентификатора.
+// При выдаче след ID икрементирует свою внутреннюю переменную.
+// Для правильной работы со структурой необходимо после инициализации вызывать метод Run() для запуска инкрементирующей горутины.
 type CounterID struct {
 	lastID int
 	output chan int
 }
 
-// Функция, которая создает новый экземпляр счетчика
+// NewCounter - функция, которая создает ссылку на экземпляр счетчика
 func NewCounter(lastID int) *CounterID {
 	return &CounterID{
 		lastID: lastID,
@@ -35,17 +40,18 @@ func NewCounter(lastID int) *CounterID {
 	}
 }
 
-// Метод, который увеличивает счетчик на единицу и отправляет его значение в канал
+// increment - метод, который увеличивает счетчик на единицу и отправляет его значение в канал.
 func (c *CounterID) increment() {
 	c.lastID++
 	c.output <- c.lastID
 }
 
-// Метод, который возвращает значение счетчика из канала
+// Next - метод, который возвращает значение счетчика
 func (c *CounterID) Next() int {
 	return <-c.output
 }
 
+// Run - внутри запускает горутину инкрементирующую счетчик при вызове метода Next()
 func (c *CounterID) Run() {
 	go func() {
 		for {
@@ -54,6 +60,7 @@ func (c *CounterID) Run() {
 	}()
 }
 
+// Shortener представляет собой объект, отвечающий за генерацию и хранение коротких ссылок
 type Shortener struct {
 	db            storage.Storage
 	lastID        *CounterID
@@ -61,6 +68,7 @@ type Shortener struct {
 	secretKey     []byte
 }
 
+// New создает ссылку на новый объект Shortener с переданными параметрами
 func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	rand.Seed(time.Now().Unix())
 
@@ -107,10 +115,16 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	return &NewSh
 }
 
+// SetBatchURLs - осуществляет пакетную установку множества ссылок в хранилище.
+// Функция принимает входные данные batch типа schema.APIShortenBatchInput и token типа string,
+// и возвращает слайс строк с короткими идентификаторами ссылок и ошибку типа error.
 func (s *Shortener) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	return s.db.SetBatchURLs(batch, token)
 }
 
+// DeleteBatch - осуществляет пакетное удаление множества ссылок из хранилища.
+// Функция принимает входные данные batchShortKeys типа []string с короткими идентификаторами ссылок,
+// token типа string, и не возвращает значения.
 func (s *Shortener) DeleteBatch(batchShortKeys []string, token string) {
 	numCh := 4
 	inputChs := make([]chan []string, 0, numCh)
@@ -133,12 +147,12 @@ func (s *Shortener) DeleteBatch(batchShortKeys []string, token string) {
 	}
 }
 
-// пингует БД
+// PingDB - пингует БД
 func (s *Shortener) PingDB() error {
 	return s.db.Ping()
 }
 
-// генерирует рандомный набор байт
+// GenerateRandomBytes - генерирует рандомный набор байт
 func GenerateRandomBytes(size int) ([]byte, error) {
 	b := make([]byte, size)
 	_, err := crand.Read(b)
@@ -148,7 +162,9 @@ func GenerateRandomBytes(size int) ([]byte, error) {
 	return b, nil
 }
 
-// генерирует новый токен для пользователя
+// GenerateNewToken генерирует новый токен для пользователя на основе рандомного набора байт в качестве id пользователя
+// и секретного ключа, используя алгоритм HMAC-SHA256.
+// Возвращает токен в виде строки в шестнадцатеричном виде и ошибку, если таковая возникла.
 func (s *Shortener) GenerateNewToken() (string, error) {
 	idUser, err := GenerateRandomBytes(4)
 	if err != nil {
@@ -162,7 +178,8 @@ func (s *Shortener) GenerateNewToken() (string, error) {
 	return hex.EncodeToString(dst), nil
 }
 
-// проверяет подлинность токена
+// CheckToken проверяет подлинность токена, переданного в виде строки в шестнадцатеричном виде,
+// используя секретный ключ и алгоритм HMAC-SHA256. Возвращает true, если токен подлинный и false, если нет.
 func (s *Shortener) CheckToken(token string) bool {
 	decodeToken, err := hex.DecodeString(token)
 	if err != nil {
@@ -176,7 +193,11 @@ func (s *Shortener) CheckToken(token string) bool {
 	return hmac.Equal(sing, dst)
 }
 
-// создает и возвращает новый ключ состоящий из закодированного id и случайных символов в конце
+// getNewKey - создает и возвращает новый ключ состоящий из закодированного id и случайных символов в конце.
+// Для кодирования используется базовый алфавит, состоящий из 64 символов, а также случайные символы,
+// генерируемые с помощью пакета rand.
+// Функция использует счетчик последнего выданного id для генерации нового ключа.
+// Возвращает сгенерированный ключ в виде строки.
 func (s *Shortener) getNewKey() string {
 	// инкриминируем и получаем id
 	id := s.lastID.Next()
@@ -207,6 +228,8 @@ func (s *Shortener) getNewKey() string {
 	return string(codeByte[baseSize-i:])
 }
 
+// getNewKeyV2 создает и возвращает новый ключ, используя генерацию случайных байтов с помощью пакета rand,
+// Это вторая версия метода getNewKey была написана для проведения бенчмарков и профилирования.
 func (s *Shortener) getNewKeyV2() string {
 	var randomBytes [6]byte
 	_, err := rand.Read(randomBytes[:])
@@ -220,7 +243,12 @@ func (s *Shortener) getNewKeyV2() string {
 	return encoded
 }
 
-// возвращает короткий ключ; полный URL сохраняет в хранилище
+// CreateShortKey генерирует новый короткий ключ для полного URL и сохраняет его в хранилище
+//
+// fullURL - полный URL, для которого нужно сгенерировать короткий ключ
+// tokenID - идентификатор пользователя, для которого генерируется ключ
+//
+// Возвращает короткий ключ, созданный для полного URL, и ошибку, если таковая произошла.
 func (s *Shortener) CreateShortKey(fullURL, tokenID string) (shortKey string, err error) {
 	key := s.getNewKey()
 	err = s.db.SetNewURL(key, fullURL, tokenID, true)
@@ -230,10 +258,20 @@ func (s *Shortener) CreateShortKey(fullURL, tokenID string) (shortKey string, er
 	return key, nil
 }
 
+// GetURL получает полный URL по заданному короткому ключу
+//
+// shortKey - короткий ключ, для которого нужно получить полный URL
+//
+// Возвращает полный URL, связанный с данным коротким ключом, и ошибку, если таковая произошла.
 func (s *Shortener) GetURL(shortKey string) (string, error) {
 	return s.db.GetURL(shortKey)
 }
 
+// GetAllURLs получает все URL, связанные с заданным идентификатором пользователя
+//
+// tokenID - идентификатор пользователя, для которого нужно получить все URL
+//
+// Возвращает map[string]string, где ключ - короткий ключ, а значение - соответствующий полный URL
 func (s *Shortener) GetAllURLs(tokenID string) map[string]string {
 	return s.db.GetAllURLs(tokenID)
 }

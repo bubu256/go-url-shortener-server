@@ -1,3 +1,4 @@
+// Отпределяет конфигурация приложения
 package config
 
 import (
@@ -8,6 +9,7 @@ import (
 	"github.com/caarlos0/env"
 )
 
+// Возвращает экземпляр конфигурации приложения.
 func New() Configuration {
 	cfg := Configuration{
 		Server: CfgServer{ServerAddress: "localhost:8080", Scheme: "http"},
@@ -15,29 +17,39 @@ func New() Configuration {
 	return cfg
 }
 
+// Configuration - конфигурация приложения.
 type Configuration struct {
 	DB      CfgDataBase
 	Server  CfgServer
 	Service CfgService
 }
 
+// CfgService - конфигурация сервиса.
 type CfgService struct {
+	// Переменная для хранения секретного ключа сервиса.
 	SecretKey string `env:"KEY"`
 }
 
+// CfgDataBase - конфигурация базы данных.
 type CfgDataBase struct {
+	// Путь к файлу для хранилища.
 	FileStoragePath string `env:"FILE_STORAGE_PATH"`
-	DataBaseDSN     string `env:"DATABASE_DSN"`
+	// Строка подключения к базе данных.
+	DataBaseDSN string `env:"DATABASE_DSN"`
 }
 
+// CfgServer - конфигурация сервера.
 type CfgServer struct {
+	// Адрес сервера.
 	ServerAddress string `env:"SERVER_ADDRESS"`
-	Scheme        string
-	BaseURL       string `env:"BASE_URL"`
+	// Используемая схема (http/https).
+	Scheme string
+	// Базовый URL для формирования короткой ссылки
+	BaseURL string `env:"BASE_URL"`
 }
 
-// Заполняет конфиг из переменных окружения
-// используемые переменные окружения:
+// Заполняет конфиг из переменных окружения.
+// Используемые переменные окружения
 // FILE_STORAGE_PATH - путь к файлу с хранилищем
 // SERVER_ADDRESS - адрес поднимаемого сервера, например "localhost:8080"
 // BASE_URL - базовый адрес для коротких ссылок "http://localhost:8080"
@@ -55,7 +67,7 @@ func (c *Configuration) LoadFromEnv() {
 	}
 }
 
-// функция парсит флаги запуска
+// LoadFromFlag - считывает флаги запуска приложения.
 func (c *Configuration) LoadFromFlag() {
 	flag.StringVar(&(c.Server.ServerAddress), "a", "localhost:8080", "Address to start the server (SERVER_ADDRESS environment)")
 	flag.StringVar(&(c.Server.BaseURL), "b", "", "Shortlink base address (BASE_URL environment)")
