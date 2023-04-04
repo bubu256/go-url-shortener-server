@@ -4,11 +4,11 @@ import (
 	"crypto/hmac"
 	crand "crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
 	"math/rand"
-	"sync/atomic"
 	"time"
 
 	"github.com/bubu256/go-url-shortener-server/config"
@@ -22,9 +22,41 @@ const (
 	baseKey      = len(basicSymbols)
 )
 
+type CounterID struct {
+	lastID int
+	output chan int
+}
+
+// Функция, которая создает новый экземпляр счетчика
+func NewCounter(lastID int) *CounterID {
+	return &CounterID{
+		lastID: lastID,
+		output: make(chan int),
+	}
+}
+
+// Метод, который увеличивает счетчик на единицу и отправляет его значение в канал
+func (c *CounterID) increment() {
+	c.lastID++
+	c.output <- c.lastID
+}
+
+// Метод, который возвращает значение счетчика из канала
+func (c *CounterID) Next() int {
+	return <-c.output
+}
+
+func (c *CounterID) Run() {
+	go func() {
+		for {
+			c.increment()
+		}
+	}()
+}
+
 type Shortener struct {
 	db            storage.Storage
-	lastID        atomic.Int64
+	lastID        *CounterID
 	rndSymbolsEnd int // количество случайных символов в конце ссылки-ключа
 	secretKey     []byte
 }
@@ -64,11 +96,14 @@ func New(db storage.Storage, cfg config.CfgService) *Shortener {
 	// инициализация счетчика количества записей
 	lastID, ok := db.GetLastID()
 	if ok {
-		NewSh.lastID.Store(lastID)
+		// NewSh.lastID.Store(lastID)
+		NewSh.lastID = NewCounter(int(lastID))
 	} else {
 		log.Println("не удалось получить последний id из хранилища. LastID установлен 100000")
-		NewSh.lastID.Store(100000)
+		// NewSh.lastID.Store(100000)
+		NewSh.lastID = NewCounter(100000)
 	}
+	NewSh.lastID.Run()
 	return &NewSh
 }
 
@@ -144,7 +179,7 @@ func (s *Shortener) CheckToken(token string) bool {
 // создает и возвращает новый ключ состоящий из закодированного id и случайных символов в конце
 func (s *Shortener) getNewKey() string {
 	// инкриминируем и получаем id
-	id := int(s.lastID.Add(1))
+	id := s.lastID.Next()
 	if id < 0 {
 		id = -id
 	}
@@ -170,6 +205,19 @@ func (s *Shortener) getNewKey() string {
 		codeByte = append(codeByte, basicSymbols[rnd])
 	}
 	return string(codeByte[baseSize-i:])
+}
+
+func (s *Shortener) getNewKeyV2() string {
+	var randomBytes [6]byte
+	_, err := rand.Read(randomBytes[:])
+	if err != nil {
+		log.Print(err)
+		return ""
+	}
+
+	// Преобразуем байты в строку с использованием базового 64-ричного алфавита
+	encoded := base64.RawURLEncoding.EncodeToString(randomBytes[:])
+	return encoded
 }
 
 // возвращает короткий ключ; полный URL сохраняет в хранилище
