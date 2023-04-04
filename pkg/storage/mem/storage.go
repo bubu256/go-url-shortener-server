@@ -1,3 +1,4 @@
+// Пакет mem реализует хранилище данных в памяти с использованием sync.Mutex для управления доступом к данным.
 package mem
 
 import (
@@ -12,7 +13,7 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-// хранилище реализованное с mutex
+// MapDBMutex представляет собой тип, реализующий хранилище данных в памяти с использованием sync.Mutex для управления доступом к данным.
 type MapDBMutex struct {
 	keyToURL         map[string]string
 	userToKeys       map[string][]string
@@ -21,7 +22,10 @@ type MapDBMutex struct {
 	mutex            sync.RWMutex
 }
 
+// NewMapDBMutex - создает новый экземпляр MapDBMutex с указанными параметрами.
 func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBMutex {
+	// Инициализация нового хранилища в памяти с параметрами, указанными в config.CfgDataBase
+	// и данными из переданной map[string]string.
 	NewStorage := MapDBMutex{connectingString: cfgDB.DataBaseDSN}
 	NewStorage.keyToURL = make(map[string]string)
 	NewStorage.userToKeys = make(map[string][]string)
@@ -32,6 +36,7 @@ func NewMapDBMutex(cfgDB config.CfgDataBase, initData map[string]string) *MapDBM
 	return &NewStorage
 }
 
+// Проверка, внутренние переменные хранилища не nil
 func (s *MapDBMutex) Ping() error {
 	if s.keyToURL == nil || s.userToKeys == nil {
 		return errors.New("s.keyToURL == nil || s.userToKeys == nil;")
@@ -39,6 +44,8 @@ func (s *MapDBMutex) Ping() error {
 	return nil
 }
 
+// SetBatchURLs - добавление пакета коротких URL-адресов в хранилище
+// Возвращает список коротких ключей добавленных URL-адресов
 func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
@@ -51,7 +58,7 @@ func (s *MapDBMutex) SetBatchURLs(batch schema.APIShortenBatchInput, token strin
 	return result, nil
 }
 
-// помечает короткие урл как недоступные при условии что токен пользователя совпадает с создавшим урл
+// DeleteBatch - помечает короткие URL-адреса как недоступные при условии, что токен пользователя совпадает с создавшим URL-адрес.
 func (s *MapDBMutex) DeleteBatch(chs []chan []string) error {
 	for keyUser := range helperfunc.FanInSliceString(chs...) {
 		s.mutex.Lock()
@@ -64,7 +71,7 @@ func (s *MapDBMutex) DeleteBatch(chs []chan []string) error {
 	return nil
 }
 
-// возвращает полный URL по ключу
+// Возвращает полный URL-адрес по короткому ключу.
 func (s *MapDBMutex) GetURL(key string) (string, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
@@ -79,6 +86,8 @@ func (s *MapDBMutex) GetURL(key string) (string, error) {
 	return fullURL, nil
 }
 
+// GetAllURLs - возвращает все записи URL, которые были сохранены пользователем с указанным идентификатором.
+// Ключи URL сохранены в виде ключей словаря, значения - в виде URL.
 func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 	result := make(map[string]string)
 	s.mutex.RLock()
@@ -96,7 +105,8 @@ func (s *MapDBMutex) GetAllURLs(userID string) map[string]string {
 	return result
 }
 
-// сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
+// SetNewURL - сохраняет URL по ключу key в хранилище.
+// Если URL уже существует в хранилище, возвращает ошибку.
 func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
@@ -117,52 +127,8 @@ func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
 	return nil
 }
 
+// GetLastID - возвращает количество сохраненных URL в хранилище.
+// Второе значение всегда true, чтобы соответствовать типу возврата других методов.
 func (s *MapDBMutex) GetLastID() (int64, bool) {
 	return int64(len(s.keyToURL)), true
 }
-
-// хранилище реализованное на sync.Map
-// type MapDB struct {
-// 	data sync.Map
-// }
-
-// func NewMapDB(cfgDB config.CfgDataBase, initData map[string]string) *MapDB {
-// 	NewStorage := MapDB{}
-// 	for k, v := range initData {
-// 		NewStorage.data.Store(k, v)
-// 	}
-
-// 	return &NewStorage
-// }
-
-// // возвращает полный URL по ключу
-// func (s *MapDB) GetURL(key string) (string, bool) {
-// 	fullURL, ok := s.data.Load(key)
-// 	if !ok {
-// 		return "", ok
-// 	}
-// 	return fullURL.(string), true
-// }
-
-// // сохраняет URL по ключу key в хранилище, иначе возвращает ошибку
-// func (s *MapDB) SetNewURL(key, URL string) error {
-// 	if _, ok := s.data.Load(key); ok {
-// 		err := fmt.Errorf("'%v' - уже существует в хранилище, запись не разрешена;", key)
-// 		return err
-// 	}
-
-// 	s.data.Store(key, URL)
-// 	return nil
-// }
-
-// func (s *MapDB) GetLastID() (int64, bool) {
-// 	// считаем количество элементов
-// 	length := int64(0)
-
-// 	s.data.Range(func(_, _ interface{}) bool {
-// 		length++
-// 		return true
-// 	})
-
-// 	return length, true
-// }
