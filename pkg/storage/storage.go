@@ -1,3 +1,5 @@
+// Пакет storage содержит интерфейс Storage, который определяет методы для работы с хранилищем URL.
+// Также пакет содержит функцию New для создания объекта, реализующего интерфейс Storage, на основе настроек.
 package storage
 
 import (
@@ -15,17 +17,29 @@ import (
 	"github.com/bubu256/go-url-shortener-server/pkg/storage/postgres"
 )
 
+// Storage - интерфейс, определяющий методы для работы с хранилищем URL
 type Storage interface {
+	// GetURL возвращает URL-адрес для заданного ключа.
 	GetURL(key string) (string, error)
+	// GetAllURLs возвращает все URL-адреса, связанные с указанным пользователем.
 	GetAllURLs(userID string) map[string]string
+	// SetNewURL сохраняет URL-адрес в хранилище и связывает его с указанным ключом.
 	SetNewURL(key, URL, tokenID string, available bool) error
-	// DeleteBatch(batchShortKeys []string, token string) error
+	// DeleteBatch удаляет из хранилища URL-адреса по списку коротких ключей
+	// переданных через каналы.
 	DeleteBatch(inputChs []chan []string) error
+	// GetLastID возвращает последний используемый идентификатор URL-адреса.
 	GetLastID() (int64, bool)
+	// Ping проверяет возможность подключения к хранилищу.
 	Ping() error
+	// SetBatchURLs сохраняет группу URL-адресов в хранилище.
 	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
 }
 
+// New - функция, создающая объект, реализующий интерфейс Storage, на основе настроек.
+// Если в настройках указаны параметры подключения к PostgreSQL, то создается объект postgres.Storage.
+// В противном случае создается объект mem.MapDBMutex. Если в настройках указан путь к файлу, то объект оборачивается
+// в обертку NewWrapToSaveFile, которая сохраняет данные хранилища в указанный файл при каждом изменении.
 func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
 	if cfgDB.DataBaseDSN != "" {
 		db, err := postgres.New(cfgDB)
@@ -47,12 +61,13 @@ func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
 	return newStorage
 }
 
-// структура для Storage дополнительно сохраняет данные в файл
+// WrapToSaveFile - обертка над хранилищем, которая дополнительно сохраняет данные в файл
 type WrapToSaveFile struct {
 	storage Storage
 	file    *RWFile
 }
 
+// SetNewURL - сохраняет новый URL и дополнительно записывает его в файл.
 func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string, available bool) error {
 	// вызываем базовый обработчик
 	err := s.storage.SetNewURL(key, URL, TokenID, available)
@@ -69,6 +84,7 @@ func (s *WrapToSaveFile) SetNewURL(key, URL, TokenID string, available bool) err
 	return nil
 }
 
+// SetBatchURLs - сохраняет пакет URL'ов и дополнительно записывает их в файл
 func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	for _, elem := range batch {
@@ -81,6 +97,7 @@ func (s *WrapToSaveFile) SetBatchURLs(batch schema.APIShortenBatchInput, token s
 	return result, nil
 }
 
+// DeleteBatch - удаляет несколько записей, используя каналы и дополнительно записывает изменения в файл.
 func (s *WrapToSaveFile) DeleteBatch(chs []chan []string) error {
 	// т.к. это обертка над хранилищем
 	// придется читать каналы и писать в новые для след. хранилища
@@ -113,23 +130,29 @@ func (s *WrapToSaveFile) DeleteBatch(chs []chan []string) error {
 	return nil
 }
 
+// GetURL - получает URL по короткому ключу
 func (s *WrapToSaveFile) GetURL(key string) (string, error) {
 	return s.storage.GetURL(key)
 }
 
+// GetLastID - возвращает последний сохраненный ID
+// возвращает bool - true, если последний ID найден и false, если ID отсутствует.
 func (s *WrapToSaveFile) GetLastID() (int64, bool) {
 	return s.storage.GetLastID()
 }
 
+// GetAllURLs - возвращает словарь с короткими и полными URL для данного пользователя.
 func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 	return s.storage.GetAllURLs(userID)
 }
 
+// Ping - возвращает ошибку, если к серверу нет подключения.
 func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
 }
 
-// проставляем флаг недоступности если юзер == юзеру автору записи
+// attemptSetAvailableFalse проверяет, является ли пользователь автором записи
+// и помечает запись как недоступную, если да.
 func (s *WrapToSaveFile) attemptSetAvailableFalse(key, user string) {
 	key2fullURL := s.storage.GetAllURLs(user)
 	if fullURL, ok := key2fullURL[key]; ok {
@@ -145,7 +168,7 @@ func (s *WrapToSaveFile) attemptSetAvailableFalse(key, user string) {
 	}
 }
 
-// Возвращает Storage с на основе исходного (st) с возможность работать с файлом
+// NewWrapToSaveFile - оборачивает и возвращает Storage с возможностью записывать данные в файл.
 func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	//загружаем данные из файла если он есть
 	file, err := NewRWFile(pathFile)
@@ -172,9 +195,8 @@ func NewWrapToSaveFile(pathFile string, st Storage) (Storage, error) {
 	return &WrapToSaveFile{storage: st, file: file}, nil
 }
 
-// структура для сериализации данных
-// Match.Available *bool я использую тут указатель что бы можно было отследить
-// отсутствие поля и установить значение по умолчанию true
+// Match - структура для сериализации данных
+// Available *bool необходим так как указывает на наличие поля и установку значения по умолчанию true.
 type Match struct {
 	ShortKey  string `json:"short_key"`
 	FullURL   string `json:"full_url"`
@@ -182,7 +204,7 @@ type Match struct {
 	Available *bool  `json:"available"` // default true
 }
 
-// структура для работы с файлом
+// RWFile - структура для работы с файлом.
 type RWFile struct {
 	path    string
 	file    *os.File
@@ -191,7 +213,7 @@ type RWFile struct {
 	mu      sync.Mutex
 }
 
-// создает структуру с открытым файлом на чтение/запись и decoder, encoder
+// NewRWFile - создает структуру с открытым файлом на чтение/запись и decoder, encoder.
 func NewRWFile(pathFile string) (*RWFile, error) {
 	file, err := os.OpenFile(pathFile, os.O_RDWR|os.O_CREATE, 0777)
 	if err != nil {
@@ -202,13 +224,14 @@ func NewRWFile(pathFile string) (*RWFile, error) {
 	return &rwf, nil
 }
 
+// WriteMatch - сериализует элемент Match и записывает в файл.
 func (r *RWFile) WriteMatch(match Match) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.encoder.Encode(match)
 }
 
-// декодирует элемент Match из файла
+// ReadMatch - декодирует элемент Match из файла.
 func (r *RWFile) ReadMatch() (*Match, error) {
 	match := Match{}
 	err := r.decoder.Decode(&match)
@@ -222,13 +245,14 @@ func (r *RWFile) ReadMatch() (*Match, error) {
 	return &match, nil
 }
 
+// Close - закрывает файл и очищает encoder и decoder.
 func (r *RWFile) Close() error {
 	r.decoder = nil
 	r.encoder = nil
 	return r.file.Close()
 }
 
-// открывает файл для записи в конец и создает encoder
+// OpenAppend - открывает файл для записи в конец и создает encoder.
 func (r *RWFile) OpenAppend() error {
 	file, err := os.OpenFile(r.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0777)
 	if err != nil {

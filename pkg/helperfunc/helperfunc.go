@@ -1,8 +1,10 @@
-// модуль содержит вспомогательные функции общие для нескольких модулей
+// Пакет helperfunc содержит вспомогательные функции, которые используются несколькими модулями.
 package helperfunc
 
 import "sync"
 
+// FanInSliceString - объединяет несколько каналов типа []string в один канал и возвращает его.
+// Функция ожидает, что каждый канал будет закрыт после передачи всех данных.
 func FanInSliceString(chs ...chan []string) chan []string {
 	OutCh := make(chan []string)
 	wg := &sync.WaitGroup{}

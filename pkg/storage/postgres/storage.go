@@ -1,3 +1,4 @@
+// Package postgres содержит реализацию хранилища URL, использующего PostgreSQL.
 package postgres
 
 import (
@@ -19,11 +20,14 @@ import (
 	"github.com/jackc/pgerrcode"
 )
 
+// PDStore - структура для хранения подключения к Postgres и строки подключения.
 type PDStore struct {
 	db               *sql.DB
 	connectingString string
 }
 
+// New создает новое подключение к БД Postgres, используя переданный конфигурационный файл.
+// Возвращает указатель на PDStore и ошибку, если она есть.
 func New(cfg config.CfgDataBase) (*PDStore, error) {
 	db, err := sql.Open("pgx", cfg.DataBaseDSN)
 	if err != nil {
@@ -47,6 +51,15 @@ func New(cfg config.CfgDataBase) (*PDStore, error) {
 	return &PDStore{connectingString: cfg.DataBaseDSN, db: db}, nil
 }
 
+// SetBatchURLs добавляет несколько новых URL-адресов в базу данных Postgres.
+// Параметры:
+//
+//	batch: набор элементов APIShortenBatchInput, содержащих информацию о каждом добавляемом URL.
+//	token: токен пользователя, отправляющего запрос.
+//
+// Возвращает:
+//
+//	список коротких идентификаторов добавленных URL и ошибку, если она есть.
 func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error) {
 	result := make([]string, 0, len(batch))
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
@@ -82,7 +95,9 @@ func (p *PDStore) SetBatchURLs(batch schema.APIShortenBatchInput, token string) 
 	return result, nil
 }
 
-// func (p *PDStore) DeleteBatch(batchShortKeys []string, token string) error {
+// DeleteBatch удаляет короткие ссылки из БД пакетно, по списку каналов со списками коротких ссылок для каждого пользователя.
+// При этом короткая ссылка помечается как недоступная (available=false), а ее полное значение в поле full_url изменяется на short_id||'_deleted='||full_url
+// Функция использует транзакции для защиты от гонок.
 func (p *PDStore) DeleteBatch(inputChs []chan []string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
@@ -119,6 +134,8 @@ func (p *PDStore) DeleteBatch(inputChs []chan []string) error {
 	return tx.Commit()
 }
 
+// GetURL возвращает полное значение ссылки по ее короткому значению.
+// Если ссылка недоступна, то возвращается ошибка ErrorPageNotAvailable
 func (p *PDStore) GetURL(key string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
@@ -140,6 +157,8 @@ func (p *PDStore) GetURL(key string) (string, error) {
 	return fullURL, nil
 }
 
+// GetAllURLs возвращает все короткие ссылки и их полные значения для заданного пользователя в виде карты (short_id -> full_url).
+// При этом исключаются ссылки, которые помечены как недоступные (available=false)
 func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	result := make(map[string]string)
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
@@ -171,6 +190,12 @@ func (p *PDStore) GetAllURLs(userID string) map[string]string {
 	return result
 }
 
+// SetNewURL добавляет новый URL в базу данных. Если ключ уже существует, то возвращает ошибку дубликата URL
+// key - сокращенный ключ, по которому можно получить URL
+// URL - полный URL-адрес, который будет сокращен
+// tokenID - идентификатор пользователя, который создал короткую ссылку
+// available - флаг доступности короткой ссылки
+// Возвращает ошибку, если произошла ошибка вставки в базу данных или если ключ уже существует.
 func (p *PDStore) SetNewURL(key, URL, tokenID string, available bool) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
@@ -188,6 +213,8 @@ func (p *PDStore) SetNewURL(key, URL, tokenID string, available bool) error {
 	return err
 }
 
+// GetLastID получает последний ID из базы данных
+// Возвращает последний ID и флаг, указывающий, успешно ли был получен последний ID
 func (p *PDStore) GetLastID() (int64, bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()
@@ -200,6 +227,7 @@ func (p *PDStore) GetLastID() (int64, bool) {
 	return int64(lastID), true
 }
 
+// Ping проверяет соединение с базой данных. Возвращает ошибку, если соединение не было установлено или было прервано.
 func (p *PDStore) Ping() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1000*time.Millisecond)
 	defer cancel()

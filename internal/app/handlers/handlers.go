@@ -1,3 +1,4 @@
+// Пакет handlers предоставляет HTTP-обработчики для сервиса сокращения URL-адресов.
 package handlers
 
 import (
@@ -20,12 +21,14 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// Handlers - предоставляет HTTP-обработчики для сервиса сокращения URL-адресов.
 type Handlers struct {
 	Router  *chi.Mux
 	service *shortener.Shortener
 	baseURL string
 }
 
+// New возвращает ссылку на новую структуру Handlers.
 func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	if service == nil {
 		log.Fatal("указатель на структуру shortener.Shortener должен быть != nil;")
@@ -45,7 +48,8 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	return &NewHandlers
 }
 
-// GET пингует базу данных
+// HandlerPing - обработчик GET запроса.
+// Выполняет проверку соединения с БД.
 func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
 	err := h.service.PingDB()
 	if err != nil {
@@ -55,7 +59,9 @@ func (h *Handlers) HandlerPing(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// обработчик Post запросов, возвращает сокращенный URL в теле ответа
+// HandlerURLtoShort - обработчик Post запросов, который создает сокращенный URL для переданного URL в теле запроса.
+// Возвращает его в теле ответа.
+// Если при создании сокращенного URL произошла ошибка, то возвращает соответствующий HTTP статус.
 func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 	StatusCode := http.StatusCreated
 	body, err := io.ReadAll(r.Body)
@@ -93,8 +99,8 @@ func (h *Handlers) HandlerURLtoShort(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(shortURL))
 }
 
-// обработчик Get запросов, возвращает полный URL в заголовке ответа Location
-// router.Get "/{ShortKey}"
+// HandlerShortToURL - обработчик Get запросов, который возвращает полный URL, соответствующий переданному короткому идентификатору
+// ссылки в пути URL, в заголовке ответа Location. Если URL не найден в базе данных, то возвращает соответствующий HTTP статус.
 func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "ShortKey")
 	fullURL, err := h.service.GetURL(shortKey)
@@ -110,7 +116,7 @@ func (h Handlers) HandlerShortToURL(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
 
-// POST записывает сокращенный идентификатор и полный урл в хранилище
+// HandlerAPIShortenBatch - записывает сокращенный идентификатор и полный URL в хранилище в формате batch.
 func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Content-Type") != "application/json" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -168,7 +174,7 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 	w.Write(result)
 }
 
-// POST возвращает сокращенный URL в json формате
+// HandlerAPIShorten - возвращает сокращенный URL в формате JSON.
 func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	StatusCode := http.StatusCreated
 	// читаем запрос
@@ -227,7 +233,7 @@ func (h *Handlers) HandlerAPIShorten(w http.ResponseWriter, r *http.Request) {
 	w.Write(result)
 }
 
-// GET возвращает пользователю все его сокращенные и полные URL в json формате
+// HandlerAPIUserAllURLs - возвращает пользователю все его сокращенные и полные URL в формате JSON
 func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request) {
 	token, err := GetToken(r)
 	if err != nil {
@@ -265,7 +271,8 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 	w.Write(result)
 }
 
-// router.Delete("/api/user/urls", NewHandlers.HandlerAPIDeleteUrls)
+// HandlerAPIDeleteUrls - удаляет все URL, переданные в запросе в формате JSON
+// Удаление происходит только при получении запроса от автора создания короткого идентификатора.
 func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) {
 	token, err := GetToken(r)
 	if err != nil {
@@ -289,22 +296,23 @@ func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusAccepted)
 }
 
-// функция принимает ключ и возвращает короткую ссылку на основе Handlers.baseURL
+// createLink - метод создает короткую ссылку на основе ключа
 func (h *Handlers) createLink(shortKey string) (string, error) {
 	return url.JoinPath(h.baseURL, shortKey)
 }
 
-// структура для подмены writer
+// newWriter - структура для подмены writer
 type newWriter struct {
 	http.ResponseWriter
 	Writer io.Writer
 }
 
+// Write - метод для записи в newWriter
 func (w newWriter) Write(b []byte) (int, error) {
 	return w.Writer.Write(b)
 }
 
-// Middleware функция проверяет и выдает токен в куках для аутентификации
+// TokenHandler - Middleware функция проверяет и выдает токен в куках для аутентификации
 func (h *Handlers) TokenHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token, err := r.Cookie("token")
@@ -326,7 +334,7 @@ func (h *Handlers) TokenHandler(next http.Handler) http.Handler {
 	})
 }
 
-// Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
+// gzipWriter - Middleware функция подменяет responsewriter если требуется сжатие gzip в ответе
 func gzipWriter(next http.Handler) http.Handler {
 	// используем замыкание чтобы не создавать каждый раз новый объект используя NewWriterLevel
 	// есть ли тут проблемы с потокобезопасностью?
@@ -349,7 +357,7 @@ func gzipWriter(next http.Handler) http.Handler {
 	})
 }
 
-// Middleware функция для POST распаковывает сжатый gzip (Content-Type: gzip)
+// gzipReader - Middleware функция для POST. Распаковывает сжатый gzip
 func gzipReader(next http.Handler) http.Handler {
 	// готовим буфер для последующего создания ридера
 	var buf bytes.Buffer
@@ -377,7 +385,8 @@ func gzipReader(next http.Handler) http.Handler {
 	})
 }
 
-// добываем последний cookie token (если токен был не верный, то был выдан новый и он последний, его и берем)
+// GetToken - функция для получения последнего токена в куках
+// Токен определяется перебором, что исключает ошибки в случае наличия нескольких токенов (берется только последний записанный токен)
 func GetToken(r *http.Request) (string, error) {
 	cookies := r.Cookies()
 	cookie := new(http.Cookie)

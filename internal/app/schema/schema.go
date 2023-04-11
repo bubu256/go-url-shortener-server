@@ -1,30 +1,29 @@
-// данный пакет содержит структуры
-// необходимые для пересылки данных между другими пакетами
+// Package schema предоставляет структуры, необходимые для пересылки данных между пакетами.
 package schema
 
-// структура для принятия данных в запросе из json
+// APIShortenInput - структура, используемая для принятия данных в запросе
 type APIShortenInput struct {
 	URL string `json:"url"`
 }
 
-// структура для отправки сокращенного url в json
+// APIShortenOutput - структура, используемая для отправки сокращенного URL в JSON.
 type APIShortenOutput struct {
 	Result string `json:"result"`
 }
 
-// структура для отправки всех url пользователя в json
+// APIUserURLs - массив структур, используемый для отправки всех URL пользователя в JSON.
 type APIUserURLs []struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`
 }
 
-// структура для приемки множества ссылок и их коротких идентификаторов
+// APIShortenBatchInput - массив структур, используемый для приемки множества ссылок и их коротких идентификаторов.
 type APIShortenBatchInput []struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
 }
 
-// структура для возврата добавленных ссылок
+// APIShortenBatchOutput - массив структур, используемый для возврата добавленных ссылок.
 type APIShortenBatchOutput []struct {
 	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`

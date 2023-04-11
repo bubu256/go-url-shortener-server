@@ -1,5 +1,8 @@
+// Package profiler содержит middleware для роутингового фреймворка Chi,
+// который предоставляет доступ к профилировщику Go pprof.
+//
 // код взят тут https://github.com/go-chi/chi/blob/master/middleware/profiler.go
-// работает но непонятно надо ли такое мне это использовать
+// работает, но непонятно надо ли такое мне это использовать.
 package profiler
 
 import (
@@ -11,16 +14,18 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Profiler is a convenient subrouter used for mounting net/http/pprof. ie.
+// Profiler - создает новый экземпляр роутера Chi с маршрутами,
+// обеспечивающими доступ к pprof и expvar.
 //
-//  func MyService() http.Handler {
-//    r := chi.NewRouter()
-//    // ..middlewares
-//    r.Mount("/debug", middleware.Profiler())
-//    // ..routes
-//    return r
-//  }
-
+// Deprecated:
+//
+//	func MyService() http.Handler {
+//	  r := chi.NewRouter()
+//	  // ..middlewares
+//	  r.Mount("/debug", middleware.Profiler())
+//	  // ..routes
+//	  return r
+//	}
 func Profiler() http.Handler {
 	r := chi.NewRouter()
 	// r.Use(NoCache) // что это такое?
