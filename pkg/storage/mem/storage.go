@@ -1,4 +1,4 @@
-// Пакет mem реализует хранилище данных в памяти с использованием sync.Mutex для управления доступом к данным.
+// Package mem implements an in-memory data store using sync.Mutex to control access to the data.
 package mem
 
 import (

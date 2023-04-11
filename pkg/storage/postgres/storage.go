@@ -204,7 +204,7 @@ func (p *PDStore) SetNewURL(key, URL, tokenID string, available bool) error {
 	if err != nil && strings.Contains(err.Error(), pgerrcode.UniqueViolation) {
 		query := "select short_id from urls where full_url = $1 "
 		var key string
-		err := p.db.QueryRowContext(ctx, query, URL).Scan(&key)
+		err = p.db.QueryRowContext(ctx, query, URL).Scan(&key)
 		if err != nil {
 			return err
 		}

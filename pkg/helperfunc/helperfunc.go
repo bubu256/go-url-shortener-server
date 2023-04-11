@@ -1,4 +1,4 @@
-// Пакет helperfunc содержит вспомогательные функции, которые используются несколькими модулями.
+// Package helperfunc contains helper functions that are used by several modules.
 package helperfunc
 
 import "sync"
