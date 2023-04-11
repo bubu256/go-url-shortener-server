@@ -21,7 +21,7 @@ import (
 )
 
 type Handlers struct {
-	Router  http.Handler
+	Router  *chi.Mux
 	service *shortener.Shortener
 	baseURL string
 }
