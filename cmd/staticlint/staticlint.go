@@ -2,8 +2,8 @@ package staticlint
 
 import (
 	"encoding/json"
-	"fmt"
 	"go/ast"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -71,48 +71,34 @@ func main() {
 
 	appfile, err := os.Executable()
 	if err != nil {
-		fmt.Println("Ошибка при получении получении каталога запуска.")
-		panic(err)
+		log.Fatalf("Ошибка при получении получении каталога запуска. %v", err)
 	}
 
 	data, err := os.ReadFile(filepath.Join(filepath.Dir(appfile), Config))
 	if err != nil {
-		fmt.Println("Ошибка при открытии файла конфигурации.")
-		panic(err)
+		log.Fatalf("Ошибка при открытии файла конфигурации. %v", err)
 	}
 	var cfg ConfigData
 	if err = json.Unmarshal(data, &cfg); err != nil {
-		fmt.Println("Ошибка при чтении фала конфигурации.")
-		panic(err)
+		log.Fatalf("Ошибка при чтении фала конфигурации. %v", err)
 	}
+
+	checks := make(map[string]bool)
+	for _, v := range cfg.Staticcheck {
+		checks[v] = true
+	}
+
+	allAnalyzers := append(staticcheck.Analyzers, append(quickfix.Analyzers, stylecheck.Analyzers...)...)
 	mychecks := []*analysis.Analyzer{
 		ExitCheckAnalyzer,
 		printf.Analyzer,
 		shadow.Analyzer,
 		structtag.Analyzer,
 	}
-	checks := make(map[string]bool)
-	for _, v := range cfg.Staticcheck {
-		checks[v] = true
-	}
 
-	// добавляем анализаторы из staticcheck, которые указаны в файле конфигурации
-	// содержит анализаторы SA
-	for _, v := range staticcheck.Analyzers {
-		if checks[v.Analyzer.Name] || checks[v.Analyzer.Name[:2]] {
-			mychecks = append(mychecks, v.Analyzer)
-		}
-	}
-	// добавляем анализаторы из quickfix, которые указаны в файле конфигурации
-	// содержит анализаторы QF*
-	for _, v := range quickfix.Analyzers {
-		if checks[v.Analyzer.Name] || checks[v.Analyzer.Name[:2]] {
-			mychecks = append(mychecks, v.Analyzer)
-		}
-	}
-	// добавляем анализаторы из quickfix, которые указаны в файле конфигурации
-	// содержит анализаторы ST*
-	for _, v := range stylecheck.Analyzers {
+	// добавляем анализаторы, которые указаны в файле конфигурации
+	// allAnalyzers содержит анализаторы SA* ST* QF*
+	for _, v := range allAnalyzers {
 		if checks[v.Analyzer.Name] || checks[v.Analyzer.Name[:2]] {
 			mychecks = append(mychecks, v.Analyzer)
 		}
