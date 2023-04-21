@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 
@@ -13,7 +14,21 @@ import (
 	_ "net/http/pprof"
 )
 
+var (
+	buildVersion string = "N/A"
+	buildDate    string = "N/A"
+	buildCommit  string = "N/A"
+)
+
+// greeting - функция выводит версию, дату, и коммит сборки. Если данные отсутствуют то выводится "N/A"
+func greeting() {
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
+}
+
 func main() {
+	greeting()
 	cfg := config.New()
 	cfg.LoadFromFlag() // загрузка параметров из флагов запуска или значения по умолчанию
 	cfg.LoadFromEnv()  // загрузка параметров из переменных окружения

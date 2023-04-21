@@ -1,4 +1,4 @@
-// Отпределяет конфигурация приложения
+// Package config defines application configuration.
 package config
 
 import (

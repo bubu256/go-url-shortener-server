@@ -1,4 +1,4 @@
-// Пакет handlers предоставляет HTTP-обработчики для сервиса сокращения URL-адресов.
+// Package handlers provides HTTP handlers for a URL shortening service.
 package handlers
 
 import (
@@ -155,8 +155,8 @@ func (h *Handlers) HandlerAPIShortenBatch(w http.ResponseWriter, r *http.Request
 	batchOut := make(schema.APIShortenBatchOutput, len(shortKeys))
 	for i, key := range shortKeys {
 		batchOut[i].CorrelationID = key
-		fullURL, err := h.createLink(key)
-		if err != nil {
+		fullURL, err2 := h.createLink(key)
+		if err2 != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -249,9 +249,9 @@ func (h *Handlers) HandlerAPIUserAllURLs(w http.ResponseWriter, r *http.Request)
 	outUrls := make(schema.APIUserURLs, len(allURLs))
 	i := 0
 	for k, v := range allURLs {
-		shortURL, err := h.createLink(k)
-		if err != nil {
-			log.Println(err)
+		shortURL, err2 := h.createLink(k)
+		if err2 != nil {
+			log.Println(err2)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

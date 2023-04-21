@@ -1,4 +1,4 @@
-// Пакет предоставляет структуру для работы сервиса сокращения ссылок.
+// Package shortener provides the business logic for working with the URL shortening service.
 package shortener
 
 import (
@@ -209,23 +209,23 @@ func (s *Shortener) getNewKey() string {
 	baseSize := 6
 	codeByte := make([]byte, baseSize)
 	// кодируем id в базовые символы. заполняем слайс с конца.
-	i := 0 // используется как метка сколько байт было записано, нужна для возврата значения
+	idx := 0 // используется как метка сколько байт было записано, нужна для возврата значения
 	for res := id; res > 0; res /= baseKey {
-		i++
+		idx++
 		index := res % baseKey
 		// если не хватило места расширяем слайс
-		if i > baseSize {
+		if idx > baseSize {
 			baseSize *= 2
 			codeByte = append(codeByte, codeByte...)
 		}
-		codeByte[baseSize-i] = basicSymbols[index]
+		codeByte[baseSize-idx] = basicSymbols[index]
 	}
 	// добавляем в конец rndSymbolsEnd случайных символа
 	for i := 0; i < s.rndSymbolsEnd; i++ {
 		rnd := rand.Intn(baseKey)
 		codeByte = append(codeByte, basicSymbols[rnd])
 	}
-	return string(codeByte[baseSize-i:])
+	return string(codeByte[baseSize-idx:])
 }
 
 // getNewKeyV2 создает и возвращает новый ключ, используя генерацию случайных байтов с помощью пакета rand,

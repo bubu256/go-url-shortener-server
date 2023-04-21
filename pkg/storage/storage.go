@@ -1,5 +1,5 @@
-// Пакет storage содержит интерфейс Storage, который определяет методы для работы с хранилищем URL.
-// Также пакет содержит функцию New для создания объекта, реализующего интерфейс Storage, на основе настроек.
+// Package storage defines the Storage interface that specifies methods for working with a URL storage.
+// It also provides a New function for creating an object that implements the Storage interface based on the settings.
 package storage
 
 import (
