@@ -12,7 +12,7 @@ import (
 // Возвращает экземпляр конфигурации приложения.
 func New() Configuration {
 	cfg := Configuration{
-		Server: CfgServer{ServerAddress: "localhost:8080", Scheme: "http"},
+		Server: CfgServer{ServerAddress: "localhost", Scheme: "http"},
 	}
 	return cfg
 }
@@ -45,7 +45,8 @@ type CfgServer struct {
 	// Используемая схема (http/https).
 	Scheme string
 	// Базовый URL для формирования короткой ссылки
-	BaseURL string `env:"BASE_URL"`
+	BaseURL     string `env:"BASE_URL"`
+	EnableHTTPS bool   `env:"ENABLE_HTTPS"`
 }
 
 // Заполняет конфиг из переменных окружения.
@@ -74,8 +75,13 @@ func (c *Configuration) LoadFromFlag() {
 	flag.StringVar(&(c.DB.FileStoragePath), "f", "", "path to storage files (FILE_STORAGE_PATH environment)")
 	flag.StringVar(&(c.DB.DataBaseDSN), "d", "", "connecting string to DB (DATABASE_DSN environment)")
 	flag.StringVar(&(c.Service.SecretKey), "k", "", "Secret key for token generating")
+	flag.BoolVar(&(c.Server.EnableHTTPS), "s", false, "")
 	flag.Parse()
 
+	if c.Server.EnableHTTPS {
+		c.Server.Scheme = "https"
+		c.Server.ServerAddress = "localhost"
+	}
 	// Проверка базового url. Устанавливаем если url не указан или он не валидный
 	baseURL, err := url.Parse(c.Server.BaseURL)
 	if err != nil || baseURL.Host == "" {
