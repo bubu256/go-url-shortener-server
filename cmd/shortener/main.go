@@ -33,8 +33,7 @@ func greeting() {
 func main() {
 	greeting()
 	cfg := config.New()
-	cfg.LoadFromFlag() // загрузка параметров из флагов запуска или значения по умолчанию
-	cfg.LoadFromEnv()  // загрузка параметров из переменных окружения
+	cfg.LoadConfiguration() // загружаем конфигурацию
 	dataStorage := storage.New(cfg.DB, nil)
 	service := shortener.New(dataStorage, cfg.Service)
 	handler := handlers.New(service, cfg.Server)

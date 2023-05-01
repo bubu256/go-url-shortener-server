@@ -2,9 +2,12 @@
 package config
 
 import (
+	"encoding/json"
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/url"
+	"os"
 
 	"github.com/caarlos0/env"
 )
@@ -27,29 +30,52 @@ type Configuration struct {
 // CfgService - конфигурация сервиса.
 type CfgService struct {
 	// Переменная для хранения секретного ключа сервиса.
-	SecretKey string `env:"KEY"`
+	SecretKey string `env:"KEY" json:"key"`
 }
 
 // CfgDataBase - конфигурация базы данных.
 type CfgDataBase struct {
 	// Путь к файлу для хранилища.
-	FileStoragePath string `env:"FILE_STORAGE_PATH"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
 	// Строка подключения к базе данных.
-	DataBaseDSN string `env:"DATABASE_DSN"`
+	DataBaseDSN string `env:"DATABASE_DSN" json:"database_dsn"`
 }
 
 // CfgServer - конфигурация сервера.
 type CfgServer struct {
 	// Адрес сервера.
-	ServerAddress string `env:"SERVER_ADDRESS"`
+	ServerAddress string `env:"SERVER_ADDRESS" json:"server_address"`
 	// Используемая схема (http/https).
 	Scheme string
 	// Базовый URL для формирования короткой ссылки
-	BaseURL     string `env:"BASE_URL"`
-	EnableHTTPS bool   `env:"ENABLE_HTTPS"`
+	BaseURL     string `env:"BASE_URL" json:"base_url"`
+	EnableHTTPS bool   `env:"ENABLE_HTTPS" json:"enable_https"`
 }
 
-// Заполняет конфиг из переменных окружения.
+// LoadConfiguration - заполняет структуру Configuration согласно приоритету (от меньшего к большему).
+// - ReadConfigFile - загрузка из файла конфигурации
+// - LoadFromFlag - загрузка из флагов запуска
+// - LoadFromEnv - загрузка из переменных окружения
+func (c *Configuration) LoadConfiguration() {
+	var cfgFilePath string
+	for i, arg := range os.Args {
+		if (arg == "-c" || arg == "-config") && i+1 < len(os.Args) {
+			cfgFilePath = os.Args[i+1]
+			break
+		}
+	}
+
+	if cfgFilePath != "" {
+		err := c.ReadConfigFile(cfgFilePath)
+		if err != nil {
+			log.Printf("ошибка при чтении файла конфигурации %v", err)
+		}
+	}
+	c.LoadFromFlag()
+	c.LoadFromEnv()
+}
+
+// LoadFromEnv - заполняет конфиг из переменных окружения.
 // Используемые переменные окружения
 // FILE_STORAGE_PATH - путь к файлу с хранилищем
 // SERVER_ADDRESS - адрес поднимаемого сервера, например "localhost:8080"
@@ -68,14 +94,53 @@ func (c *Configuration) LoadFromEnv() {
 	}
 }
 
+// ReadConfigFile - читает файл конфигурации и заполняет поля структуры.
+func (c *Configuration) ReadConfigFile(filePath string) error {
+	file, err := ioutil.ReadFile(filePath)
+	if err != nil {
+		return err
+	}
+
+	type cfgJSON struct {
+		ServerAddress   string `json:"server_address"`
+		BaseURL         string `json:"base_url"`
+		FileStoragePath string `json:"file_storage_path"`
+		DataBaseDSN     string `json:"database_dsn"`
+		EnableHTTPS     bool   `json:"enable_https"`
+		SecretKey       string `json:"key"`
+	}
+	cfgFromFile := cfgJSON{}
+
+	err = json.Unmarshal(file, &cfgFromFile)
+	if err != nil {
+		return err
+	}
+	c.Server.BaseURL = cfgFromFile.BaseURL
+	c.Server.EnableHTTPS = cfgFromFile.EnableHTTPS
+	c.Server.ServerAddress = cfgFromFile.ServerAddress
+	c.Service.SecretKey = cfgFromFile.SecretKey
+	c.DB.DataBaseDSN = cfgFromFile.DataBaseDSN
+	c.DB.FileStoragePath = cfgFromFile.FileStoragePath
+
+	if c.Server.EnableHTTPS {
+		c.Server.Scheme = "https"
+	} else {
+		c.Server.Scheme = "http"
+	}
+
+	return nil
+}
+
 // LoadFromFlag - считывает флаги запуска приложения.
 func (c *Configuration) LoadFromFlag() {
-	flag.StringVar(&(c.Server.ServerAddress), "a", "localhost:8080", "Address to start the server (SERVER_ADDRESS environment)")
-	flag.StringVar(&(c.Server.BaseURL), "b", "", "Shortlink base address (BASE_URL environment)")
-	flag.StringVar(&(c.DB.FileStoragePath), "f", "", "path to storage files (FILE_STORAGE_PATH environment)")
-	flag.StringVar(&(c.DB.DataBaseDSN), "d", "", "connecting string to DB (DATABASE_DSN environment)")
-	flag.StringVar(&(c.Service.SecretKey), "k", "", "Secret key for token generating")
-	flag.BoolVar(&(c.Server.EnableHTTPS), "s", false, "")
+	flag.StringVar(&(c.Server.ServerAddress), "a", c.Server.ServerAddress, "Address to start the server (SERVER_ADDRESS environment)")
+	flag.StringVar(&(c.Server.BaseURL), "b", c.Server.BaseURL, "Shortlink base address (BASE_URL environment)")
+	flag.StringVar(&(c.DB.FileStoragePath), "f", c.DB.FileStoragePath, "path to storage files (FILE_STORAGE_PATH environment)")
+	flag.StringVar(&(c.DB.DataBaseDSN), "d", c.DB.DataBaseDSN, "connecting string to DB (DATABASE_DSN environment)")
+	flag.StringVar(&(c.Service.SecretKey), "k", c.Service.SecretKey, "Secret key for token generating")
+	flag.BoolVar(&(c.Server.EnableHTTPS), "s", c.Server.EnableHTTPS, "")
+	flag.String("c", "", "path to the configuration file")
+	flag.String("config", "", "path to the configuration file")
 	flag.Parse()
 
 	if c.Server.EnableHTTPS {
