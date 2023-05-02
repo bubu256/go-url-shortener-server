@@ -53,7 +53,7 @@ type CfgServer struct {
 }
 
 // LoadConfiguration - заполняет структуру Configuration согласно приоритету (от меньшего к большему).
-// - ReadConfigFile - загрузка из файла конфигурации
+// - ReadConfigFile - загрузка из файла конфигурации указанного через флаг -c или env CONFIG
 // - LoadFromFlag - загрузка из флагов запуска
 // - LoadFromEnv - загрузка из переменных окружения
 func (c *Configuration) LoadConfiguration() {
@@ -63,6 +63,9 @@ func (c *Configuration) LoadConfiguration() {
 			cfgFilePath = os.Args[i+1]
 			break
 		}
+	}
+	if v, ok := os.LookupEnv("CONFIG"); ok {
+		cfgFilePath = v
 	}
 
 	if cfgFilePath != "" {
