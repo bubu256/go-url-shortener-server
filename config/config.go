@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"strings"
 
 	"github.com/caarlos0/env"
 )
@@ -72,6 +73,13 @@ func (c *Configuration) LoadConfiguration() {
 	}
 	c.LoadFromFlag()
 	c.LoadFromEnv()
+
+	if c.Server.ServerAddress == "" {
+		c.Server.ServerAddress = "localhost:8080"
+	}
+	if !strings.Contains(c.Server.ServerAddress, ":") {
+		c.Server.ServerAddress = c.Server.ServerAddress + ":8080"
+	}
 }
 
 // LoadFromEnv - заполняет конфиг из переменных окружения.
