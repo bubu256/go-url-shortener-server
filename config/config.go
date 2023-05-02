@@ -159,13 +159,18 @@ func (c *Configuration) LoadFromFlag() {
 		c.Server.Scheme = "https"
 		c.Server.ServerAddress = "localhost"
 	}
-	// Проверка базового url. Устанавливаем если url не указан или он не валидный
+	c.checkBaseURL()
+}
+
+// Проверка базового url. Устанавливаем  по умолчанию если url не указан или он не валидный
+func (c *Configuration) checkBaseURL() {
 	baseURL, err := url.Parse(c.Server.BaseURL)
 	if err != nil || baseURL.Host == "" {
 		// если не вышло создаем базовый url на основе адреса сервера и схемы из конфига
 		baseURL.Scheme = c.Server.Scheme
 		baseURL.Host = c.Server.ServerAddress
+		log.Printf("Указан не валидный baseURL: %v", c.Server.BaseURL)
 		c.Server.BaseURL = baseURL.String()
-		log.Printf("Конфигурация: baseURL автоматически установлен %q", c.Server.BaseURL)
+		log.Printf("baseURL автоматически установлен %q", c.Server.BaseURL)
 	}
 }
