@@ -85,6 +85,8 @@ func (c *Configuration) LoadConfiguration() {
 	if !strings.Contains(c.Server.ServerAddress, ":") {
 		c.Server.ServerAddress = c.Server.ServerAddress + ":8080"
 	}
+
+	c.checkBaseURL()
 }
 
 // LoadFromEnv - заполняет конфиг из переменных окружения.
@@ -157,9 +159,8 @@ func (c *Configuration) LoadFromFlag() {
 
 	if c.Server.EnableHTTPS {
 		c.Server.Scheme = "https"
-		c.Server.ServerAddress = "localhost"
+		// c.Server.ServerAddress = "localhost"
 	}
-	c.checkBaseURL()
 }
 
 // Проверка базового url. Устанавливаем  по умолчанию если url не указан или он не валидный
