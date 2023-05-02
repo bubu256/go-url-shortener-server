@@ -30,26 +30,26 @@ type Configuration struct {
 // CfgService - конфигурация сервиса.
 type CfgService struct {
 	// Переменная для хранения секретного ключа сервиса.
-	SecretKey string `env:"KEY" json:"key"`
+	SecretKey string `env:"KEY"`
 }
 
 // CfgDataBase - конфигурация базы данных.
 type CfgDataBase struct {
 	// Путь к файлу для хранилища.
-	FileStoragePath string `env:"FILE_STORAGE_PATH" json:"file_storage_path"`
+	FileStoragePath string `env:"FILE_STORAGE_PATH"`
 	// Строка подключения к базе данных.
-	DataBaseDSN string `env:"DATABASE_DSN" json:"database_dsn"`
+	DataBaseDSN string `env:"DATABASE_DSN"`
 }
 
 // CfgServer - конфигурация сервера.
 type CfgServer struct {
 	// Адрес сервера.
-	ServerAddress string `env:"SERVER_ADDRESS" json:"server_address"`
+	ServerAddress string `env:"SERVER_ADDRESS"`
 	// Используемая схема (http/https).
 	Scheme string
 	// Базовый URL для формирования короткой ссылки
-	BaseURL     string `env:"BASE_URL" json:"base_url"`
-	EnableHTTPS bool   `env:"ENABLE_HTTPS" json:"enable_https"`
+	BaseURL     string `env:"BASE_URL"`
+	EnableHTTPS bool   `env:"ENABLE_HTTPS"`
 }
 
 // LoadConfiguration - заполняет структуру Configuration согласно приоритету (от меньшего к большему).
