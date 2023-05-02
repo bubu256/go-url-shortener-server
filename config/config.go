@@ -4,7 +4,6 @@ package config
 import (
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"log"
 	"net/url"
 	"os"
@@ -96,7 +95,7 @@ func (c *Configuration) LoadFromEnv() {
 
 // ReadConfigFile - читает файл конфигурации и заполняет поля структуры.
 func (c *Configuration) ReadConfigFile(filePath string) error {
-	file, err := ioutil.ReadFile(filePath)
+	file, err := os.ReadFile(filePath)
 	if err != nil {
 		return err
 	}
