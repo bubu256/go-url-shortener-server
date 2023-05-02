@@ -61,10 +61,12 @@ func (c *Configuration) LoadConfiguration() {
 	for i, arg := range os.Args {
 		if (arg == "-c" || arg == "-config") && i+1 < len(os.Args) {
 			cfgFilePath = os.Args[i+1]
+			log.Println("Указан файл конфигурации через флаг -c")
 			break
 		}
 	}
 	if v, ok := os.LookupEnv("CONFIG"); ok {
+		log.Println("Указан файл конфигурации через переменную окружения CONFIG")
 		cfgFilePath = v
 	}
 
