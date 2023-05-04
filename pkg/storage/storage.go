@@ -44,6 +44,7 @@ func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
 	if cfgDB.DataBaseDSN != "" {
 		db, err := postgres.New(cfgDB)
 		if err == nil {
+			log.Print("Хранилище: хранение данных в базе данных postgres.")
 			return db
 		}
 		log.Println(err)
@@ -55,9 +56,11 @@ func New(cfgDB config.CfgDataBase, initData map[string]string) Storage {
 	if cfgDB.FileStoragePath != "" {
 		fileStorage, err := NewWrapToSaveFile(cfgDB.FileStoragePath, newStorage)
 		if err == nil {
+			log.Print("Хранилище: хранение данных в оперативной памяти и запись в файл.")
 			return fileStorage
 		}
 	}
+	log.Print("Хранилище: хранение данных в оперативной памяти.")
 	return newStorage
 }
 
