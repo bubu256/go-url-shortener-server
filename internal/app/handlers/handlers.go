@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -23,10 +24,11 @@ import (
 
 // Handlers - предоставляет HTTP-обработчики для сервиса сокращения URL-адресов.
 type Handlers struct {
-	Router  *chi.Mux
-	service *shortener.Shortener
-	baseURL string
-	cfg     config.CfgServer
+	Router        *chi.Mux
+	service       *shortener.Shortener
+	baseURL       string
+	trustedSubnet *net.IPNet
+	cfg           config.CfgServer
 }
 
 // New возвращает ссылку на новую структуру Handlers.
@@ -34,7 +36,11 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	if service == nil {
 		log.Fatal("указатель на структуру shortener.Shortener должен быть != nil;")
 	}
-	NewHandlers := Handlers{baseURL: cfgServer.BaseURL, cfg: cfgServer}
+	NewHandlers := Handlers{
+		baseURL:       cfgServer.BaseURL,
+		trustedSubnet: ParseSubnetCIDR(cfgServer.TrustedSubnet),
+		cfg:           cfgServer,
+	}
 	NewHandlers.service = service
 	router := chi.NewRouter()
 	router.Use(gzipWriter, gzipReader, NewHandlers.TokenHandler)
@@ -300,20 +306,29 @@ func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) 
 
 // HandlerAPIINternalStats - возвращает статистику по хранилищу сервиса. Доступен только для IP из доверительной подсети (доверительная устанавливается при конфигурации сервиса)
 func (h *Handlers) HandlerAPIINternalStats(w http.ResponseWriter, r *http.Request) {
-	// тут будет проверка IP адреса
+	// проверяем IP
+	remoteAddr := r.Header.Get("X-Real-IP")
+	if remoteAddr == "" {
+		remoteAddr = r.RemoteAddr
+	}
+	if !h.isTrustedSubnet(remoteAddr) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+	// получаем статистику
 	stats, err := h.service.GetStatsStorage()
 	if err != nil {
 		log.Printf("ошибка при попытке получить статистику БД; %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	// формируем и отправляем ответ
 	statsByte, err := json.Marshal(stats)
 	if err != nil {
 		log.Printf("ошибка при формировании json по статистике БД; %v", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
-	log.Println(h.cfg.TrustedSubnet)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(statsByte)
@@ -322,6 +337,28 @@ func (h *Handlers) HandlerAPIINternalStats(w http.ResponseWriter, r *http.Reques
 // createLink - метод создает короткую ссылку на основе ключа
 func (h *Handlers) createLink(shortKey string) (string, error) {
 	return url.JoinPath(h.baseURL, shortKey)
+}
+
+// isTrustedSubnet - проверяет входит ли IP-адрес в доверительную подсеть сервера
+func (h *Handlers) isTrustedSubnet(remoteAddr string) bool {
+	if h.trustedSubnet == nil {
+		return false
+	}
+	// Парсим IP-адрес из Request.RemoteAddr
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		log.Println("Error splitting host and port:", err)
+		// return false // возможно строка не содержит порт, проверяем дальше
+		host = remoteAddr
+	}
+	IP := net.ParseIP(host)
+	if IP == nil {
+		log.Println("Error parsing IP address:", err)
+		return false
+	}
+
+	// Проверяем входит ли IP-адрес в доверительную подсеть
+	return h.trustedSubnet.Contains(IP)
 }
 
 // newWriter - структура для подмены writer
@@ -422,4 +459,15 @@ func GetToken(r *http.Request) (string, error) {
 		return "", errors.New("токен не найден;")
 	}
 	return cookie.Value, nil
+}
+
+// ParseSubnetCIDR - парсит строку в формате CIDR и возвращает подсеть *net.IPNet
+func ParseSubnetCIDR(trustedSubnet string) *net.IPNet {
+	// Парсим доверительную подсеть CIDR
+	_, subnet, err := net.ParseCIDR(trustedSubnet)
+	if err != nil {
+		log.Println("Error parsing trusted subnet:", err)
+		return nil
+	}
+	return subnet
 }
