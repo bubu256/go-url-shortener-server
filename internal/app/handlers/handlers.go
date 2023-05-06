@@ -26,6 +26,7 @@ type Handlers struct {
 	Router  *chi.Mux
 	service *shortener.Shortener
 	baseURL string
+	cfg     config.CfgServer
 }
 
 // New возвращает ссылку на новую структуру Handlers.
@@ -33,7 +34,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	if service == nil {
 		log.Fatal("указатель на структуру shortener.Shortener должен быть != nil;")
 	}
-	NewHandlers := Handlers{baseURL: cfgServer.BaseURL}
+	NewHandlers := Handlers{baseURL: cfgServer.BaseURL, cfg: cfgServer}
 	NewHandlers.service = service
 	router := chi.NewRouter()
 	router.Use(gzipWriter, gzipReader, NewHandlers.TokenHandler)
@@ -312,6 +313,7 @@ func (h *Handlers) HandlerAPIINternalStats(w http.ResponseWriter, r *http.Reques
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	log.Println(h.cfg.TrustedSubnet)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(statsByte)

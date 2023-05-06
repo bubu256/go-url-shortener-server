@@ -48,8 +48,9 @@ type CfgServer struct {
 	// Используемая схема (http/https).
 	Scheme string
 	// Базовый URL для формирования короткой ссылки
-	BaseURL     string `env:"BASE_URL"`
-	EnableHTTPS bool   `env:"ENABLE_HTTPS"`
+	BaseURL       string `env:"BASE_URL"`
+	EnableHTTPS   bool   `env:"ENABLE_HTTPS"`
+	TrustedSubnet string `env:"TRUSTED_SUBNET"`
 }
 
 // LoadConfiguration - заполняет структуру Configuration согласно приоритету (от меньшего к большему).
@@ -96,6 +97,7 @@ func (c *Configuration) LoadConfiguration() {
 // BASE_URL - базовый адрес для коротких ссылок "http://localhost:8080"
 // KEY - секретный ключ для генерации токенов
 // DATABASE_DSN - строка подключения к базе данных
+// TRUSTED_SUBNET - доверенная подсеть
 func (c *Configuration) LoadFromEnv() {
 	err := env.Parse(&(c.Server))
 	if err != nil {
@@ -105,6 +107,11 @@ func (c *Configuration) LoadFromEnv() {
 	err = env.Parse(&(c.DB))
 	if err != nil {
 		log.Println("не удалось загрузить конфигурацию хранилища из переменных окружения;", err)
+	}
+
+	err = env.Parse(&(c.Service))
+	if err != nil {
+		log.Println("не удалось загрузить конфигурацию сервиса из переменных окружения;", err)
 	}
 }
 
@@ -122,6 +129,7 @@ func (c *Configuration) ReadConfigFile(filePath string) error {
 		DataBaseDSN     string `json:"database_dsn"`
 		EnableHTTPS     bool   `json:"enable_https"`
 		SecretKey       string `json:"key"`
+		TrustedSubnet   string `json:"trusted_subnet"`
 	}
 	cfgFromFile := cfgJSON{}
 
@@ -135,6 +143,7 @@ func (c *Configuration) ReadConfigFile(filePath string) error {
 	c.Service.SecretKey = cfgFromFile.SecretKey
 	c.DB.DataBaseDSN = cfgFromFile.DataBaseDSN
 	c.DB.FileStoragePath = cfgFromFile.FileStoragePath
+	c.Server.TrustedSubnet = cfgFromFile.TrustedSubnet
 
 	if c.Server.EnableHTTPS {
 		c.Server.Scheme = "https"
@@ -152,6 +161,7 @@ func (c *Configuration) LoadFromFlag() {
 	flag.StringVar(&(c.DB.FileStoragePath), "f", c.DB.FileStoragePath, "path to storage files (FILE_STORAGE_PATH environment)")
 	flag.StringVar(&(c.DB.DataBaseDSN), "d", c.DB.DataBaseDSN, "connecting string to DB (DATABASE_DSN environment)")
 	flag.StringVar(&(c.Service.SecretKey), "k", c.Service.SecretKey, "Secret key for token generating")
+	flag.StringVar(&(c.Server.TrustedSubnet), "t", c.Server.TrustedSubnet, "trusted subnet (TRUSTED_SUBNET environment)")
 	flag.BoolVar(&(c.Server.EnableHTTPS), "s", c.Server.EnableHTTPS, "")
 	flag.String("c", "", "path to the configuration file")
 	flag.String("config", "", "path to the configuration file")
