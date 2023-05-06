@@ -238,3 +238,16 @@ func (p *PDStore) Ping() error {
 	defer db.Close()
 	return db.PingContext(ctx)
 }
+
+// GetStats - возвращает статистику по записям из базы данных
+func (p *PDStore) GetStats() (schema.APIInternalStats, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*1000)
+	defer cancel()
+	query := "select count(short_id), count(distinct user_id) from urls"
+	row := p.db.QueryRowContext(ctx, query)
+	var countURLs, countUsers int
+	if err := row.Scan(&countURLs, &countUsers); err != nil {
+		return schema.APIInternalStats{}, err
+	}
+	return schema.APIInternalStats{URLs: countURLs, Users: countUsers}, nil
+}

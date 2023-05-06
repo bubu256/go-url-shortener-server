@@ -34,6 +34,8 @@ type Storage interface {
 	Ping() error
 	// SetBatchURLs сохраняет группу URL-адресов в хранилище.
 	SetBatchURLs(batch schema.APIShortenBatchInput, token string) ([]string, error)
+	// GetStats - возвращает статистику по записям из хранилища
+	GetStats() (schema.APIInternalStats, error)
 }
 
 // New - функция, создающая объект, реализующий интерфейс Storage, на основе настроек.
@@ -152,6 +154,11 @@ func (s *WrapToSaveFile) GetAllURLs(userID string) map[string]string {
 // Ping - возвращает ошибку, если к серверу нет подключения.
 func (s *WrapToSaveFile) Ping() error {
 	return s.storage.Ping()
+}
+
+// GetStats - возвращает статистику по записям из хранилища
+func (s *WrapToSaveFile) GetStats() (schema.APIInternalStats, error) {
+	return s.storage.GetStats()
 }
 
 // attemptSetAvailableFalse проверяет, является ли пользователь автором записи

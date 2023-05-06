@@ -28,3 +28,9 @@ type APIShortenBatchOutput []struct {
 	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`
 }
+
+// APIInternalStats - структура для хранения статистики по сервису
+type APIInternalStats struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}

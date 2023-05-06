@@ -132,3 +132,8 @@ func (s *MapDBMutex) SetNewURL(key, URL, tokenID string, available bool) error {
 func (s *MapDBMutex) GetLastID() (int64, bool) {
 	return int64(len(s.keyToURL)), true
 }
+
+// GetStats - возвращает статистику по записям из хранилища
+func (s *MapDBMutex) GetStats() (schema.APIInternalStats, error) {
+	return schema.APIInternalStats{URLs: len(s.keyToURL), Users: len(s.userToKeys)}, nil
+}
