@@ -44,6 +44,7 @@ func New(service *shortener.Shortener, cfgServer config.CfgServer) *Handlers {
 	router.Delete("/api/user/urls", NewHandlers.HandlerAPIDeleteUrls)
 	router.Post("/api/shorten/batch", NewHandlers.HandlerAPIShortenBatch)
 	router.Get("/ping", NewHandlers.HandlerPing)
+	router.Get("/api/internal/stats", NewHandlers.HandlerAPIINternalStats)
 	NewHandlers.Router = router
 	return &NewHandlers
 }
@@ -294,6 +295,26 @@ func (h *Handlers) HandlerAPIDeleteUrls(w http.ResponseWriter, r *http.Request) 
 	}
 	go h.service.DeleteBatch(batchShortUrls, token)
 	w.WriteHeader(http.StatusAccepted)
+}
+
+// HandlerAPIINternalStats - возвращает статистику по хранилищу сервиса. Доступен только для IP из доверительной подсети (доверительная устанавливается при конфигурации сервиса)
+func (h *Handlers) HandlerAPIINternalStats(w http.ResponseWriter, r *http.Request) {
+	// тут будет проверка IP адреса
+	stats, err := h.service.GetStatsStorage()
+	if err != nil {
+		log.Printf("ошибка при попытке получить статистику БД; %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	statsByte, err := json.Marshal(stats)
+	if err != nil {
+		log.Printf("ошибка при формировании json по статистике БД; %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(statsByte)
 }
 
 // createLink - метод создает короткую ссылку на основе ключа

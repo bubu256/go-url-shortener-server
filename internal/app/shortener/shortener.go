@@ -275,3 +275,8 @@ func (s *Shortener) GetURL(shortKey string) (string, error) {
 func (s *Shortener) GetAllURLs(tokenID string) map[string]string {
 	return s.db.GetAllURLs(tokenID)
 }
+
+// GetStatsStorage - возвращает статистику из хранилища
+func (s *Shortener) GetStatsStorage() (schema.APIInternalStats, error) {
+	return s.db.GetStats()
+}
