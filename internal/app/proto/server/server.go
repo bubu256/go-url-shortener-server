@@ -1,3 +1,4 @@
+// Package server содержит структуры и методы grpc для работы grpc сервиса.
 package server
 
 import (
@@ -11,6 +12,7 @@ import (
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 	pb "github.com/bubu256/go-url-shortener-server/internal/app/proto"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
+	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -81,31 +83,31 @@ func (h *HandlerService) URLtoShort(ctx context.Context, req *pb.URLtoShortReque
 	return &pb.URLtoShortResponse{ShortUrl: shortURL}, nil
 }
 
+// ShortToURL - возвращает полный URL по переданному короткому идентификаторы
 func (h *HandlerService) ShortToURL(ctx context.Context, req *pb.ShortToURLRequest) (*pb.ShortToURLResponse, error) {
 	// TODO: Implement logic for ShortToURL handler
 	return &pb.ShortToURLResponse{}, nil
 }
 
+// APIShortenBatch - записывает переданные сокращенные идентификаторы и полные URL в хранилище.
 func (h *HandlerService) APIShortenBatch(ctx context.Context, req *pb.APIShortenBatchRequest) (*pb.APIShortenBatchResponse, error) {
 	// TODO: Implement logic for APIShortenBatch handler
 	return &pb.APIShortenBatchResponse{}, nil
 }
 
-func (h *HandlerService) APIShorten(ctx context.Context, req *pb.APIShortenRequest) (*pb.APIShortenResponse, error) {
-	// TODO: Implement logic for APIShorten handler
-	return &pb.APIShortenResponse{}, nil
-}
-
+// APIUserAllURLs - возвращает все URL пользователя
 func (h *HandlerService) APIUserAllURLs(ctx context.Context, req *pb.APIUserAllURLsRequest) (*pb.APIUserAllURLsResponse, error) {
 	// TODO: Implement logic for APIUserAllURLs handler
 	return &pb.APIUserAllURLsResponse{}, nil
 }
 
+// APIDeleteUrls - принимает запрос на удаление URLs. Удаление возможно только для URLs добавленных пользователем
 func (h *HandlerService) APIDeleteUrls(ctx context.Context, req *pb.APIDeleteUrlsRequest) (*pb.APIDeleteUrlsResponse, error) {
 	// TODO: Implement logic for APIDeleteUrls handler
 	return &pb.APIDeleteUrlsResponse{}, nil
 }
 
+// APIInternalStats - возвращает статистику сервера
 func (h *HandlerService) APIInternalStats(ctx context.Context, req *pb.APIInternalStatsRequest) (*pb.APIInternalStatsResponse, error) {
 	// TODO: Implement logic for APIInternalStats handler
 	return &pb.APIInternalStatsResponse{}, nil
@@ -132,9 +134,12 @@ func (h *HandlerService) createLink(shortKey string) (string, error) {
 
 // tokenInterceptor - перехватчик проверяет наличие и валидность токена
 func (h *HandlerService) tokenInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	// Исключаем метод TokenHandler из проверки токена
+	// Исключаем методы TokenHandler, ShortToURL из проверки токена и
 	log.Println(info.FullMethod)
-	if info.FullMethod == "/server.HandlerService/TokenHandler" {
+	if slices.Contains(
+		[]string{"/server.HandlerService/TokenHandler", "/server.HandlerService/ShortToURL"},
+		info.FullMethod,
+	) {
 		return handler(ctx, req)
 	}
 

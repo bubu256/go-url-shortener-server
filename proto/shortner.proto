@@ -9,7 +9,6 @@ service HandlerService {
   rpc URLtoShort(URLtoShortRequest) returns (URLtoShortResponse) {}
   rpc ShortToURL(ShortToURLRequest) returns (ShortToURLResponse) {}
   rpc APIShortenBatch(APIShortenBatchRequest) returns (APIShortenBatchResponse) {}
-  rpc APIShorten(APIShortenRequest) returns (APIShortenResponse) {}
   rpc APIUserAllURLs(APIUserAllURLsRequest) returns (APIUserAllURLsResponse) {}
   rpc APIDeleteUrls(APIDeleteUrlsRequest) returns (APIDeleteUrlsResponse) {}
   rpc APIInternalStats(APIInternalStatsRequest) returns (APIInternalStatsResponse) {}
@@ -55,10 +54,6 @@ message APIShortenBatchResponse {
 message ShortURLMapping {
   string correlation_id = 1;
   string short_url = 2;
-}
-
-message APIShortenRequest {
-  string url = 1;
 }
 
 message APIShortenResponse {
