@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,6 +15,9 @@ import (
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/handlers"
+
+	pb "github.com/bubu256/go-url-shortener-server/internal/app/proto"
+	gs "github.com/bubu256/go-url-shortener-server/internal/app/proto/server"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
 	"github.com/bubu256/go-url-shortener-server/pkg/storage"
 
@@ -65,8 +69,8 @@ func main() {
 	go func() {
 		http.ListenAndServe(":6060", nil) // сервер для профилирования
 	}()
-
-	log.Println("Сервер:", cfg.Server.ServerAddress)
+	// запуск http сервера
+	log.Println("Сервер HTTP начал работу:", cfg.Server.ServerAddress)
 	server := &http.Server{}
 	if !cfg.Server.EnableHTTPS {
 		server = &http.Server{
@@ -90,6 +94,24 @@ func main() {
 			}
 		}()
 	}
+
+	// запуск gRPC сервера
+	handlerService, servergRPC := gs.New(service, cfg.Server)
+	pb.RegisterHandlerServiceServer(servergRPC, handlerService)
+	// определяем порт для сервера
+	listen, err := net.Listen("tcp", ":3200")
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Сервер gRPC начал работу:", ":3200")
+	// получаем запросы gRPC
+	go func() {
+		if err := servergRPC.Serve(listen); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	// перехватчик сигнала прерывания
 	handleSignals(server)
 	log.Println("Сервер остановлен.")
 }
