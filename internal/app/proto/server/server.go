@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Структура HandlerService хранит настройки для работы сервера и содержит gRPC методы
 type HandlerService struct {
 	pb.UnimplementedHandlerServiceServer
 	service *shortener.Shortener
