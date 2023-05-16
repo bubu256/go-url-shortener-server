@@ -11,6 +11,7 @@ import (
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
 	pb "github.com/bubu256/go-url-shortener-server/internal/app/proto"
+	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
 	"golang.org/x/exp/slices"
 	"google.golang.org/grpc"
@@ -53,16 +54,11 @@ func (h *HandlerService) Ping(ctx context.Context, req *pb.PingRequest) (*pb.Pin
 // URLtoShort - Принимает полный URL и возвращает короткую ссылку.
 // Если полный URL уже существует в базе возвращает ошибку и существующую короткую ссылку.
 func (h *HandlerService) URLtoShort(ctx context.Context, req *pb.URLtoShortRequest) (*pb.URLtoShortResponse, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, status.Error(codes.Internal, "failed to get metadata from context;")
+	token := getToken(ctx)
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован")
 	}
-	// получение токена
-	values := md.Get("token")
-	if len(values) == 0 {
-		return nil, status.Error(codes.Internal, "произошла потеря токена;")
-	}
-	token := values[0]
+
 	// получаем короткий идентификатор ссылки
 	shortKey, err := h.service.CreateShortKey(req.Url, token)
 	var errDuplicate *errorapp.URLDuplicateError
@@ -86,25 +82,61 @@ func (h *HandlerService) URLtoShort(ctx context.Context, req *pb.URLtoShortReque
 
 // ShortToURL - возвращает полный URL по переданному короткому идентификаторы
 func (h *HandlerService) ShortToURL(ctx context.Context, req *pb.ShortToURLRequest) (*pb.ShortToURLResponse, error) {
-	// TODO: Implement logic for ShortToURL handler
-	return &pb.ShortToURLResponse{}, nil
+	fullURL, err := h.service.GetURL(req.ShortKey)
+	if err != nil {
+		if errors.Is(err, errorapp.ErrorPageNotAvailable) {
+			return nil, status.Errorf(codes.NotFound, "ресурс больше не доступен %v;", err)
+		}
+		return nil, status.Errorf(codes.NotFound, "ресурс отсутствует %v;", err)
+	}
+	return &pb.ShortToURLResponse{FullUrl: fullURL}, nil
 }
 
 // APIShortenBatch - записывает переданные сокращенные идентификаторы и полные URL в хранилище.
 func (h *HandlerService) APIShortenBatch(ctx context.Context, req *pb.APIShortenBatchRequest) (*pb.APIShortenBatchResponse, error) {
-	// TODO: Implement logic for APIShortenBatch handler
-	return &pb.APIShortenBatchResponse{}, nil
+	token := getToken(ctx)
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован;")
+	}
+	// формируем батч для обработки
+	batch := make(schema.APIShortenBatchInput, len(req.Urls))
+	for i, elem := range req.Urls {
+		batch[i].CorrelationID = elem.CorrelationId
+		batch[i].OriginalURL = elem.OriginalUrl
+	}
+	// получаем идентификаторы ссылок записанные в базу
+	shortKeys, err := h.service.SetBatchURLs(batch, token)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "ошибка при добавлении batch ссылок;")
+	}
+	result := make([]*pb.ShortURLMapping, len(shortKeys))
+	for _, key := range shortKeys {
+		shortURL, err := h.createLink(key)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "ошибка при формировании короткой ссылки %v;", err)
+		}
+		result = append(result, &pb.ShortURLMapping{CorrelationId: key, ShortUrl: shortURL})
+	}
+	return &pb.APIShortenBatchResponse{ShortUrls: result}, nil
 }
 
 // APIUserAllURLs - возвращает все URL пользователя
 func (h *HandlerService) APIUserAllURLs(ctx context.Context, req *pb.APIUserAllURLsRequest) (*pb.APIUserAllURLsResponse, error) {
-	// TODO: Implement logic for APIUserAllURLs handler
+	token := getToken(ctx)
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован;")
+	}
+
 	return &pb.APIUserAllURLsResponse{}, nil
 }
 
 // APIDeleteUrls - принимает запрос на удаление URLs. Удаление возможно только для URLs добавленных пользователем
 func (h *HandlerService) APIDeleteUrls(ctx context.Context, req *pb.APIDeleteUrlsRequest) (*pb.APIDeleteUrlsResponse, error) {
-	// TODO: Implement logic for APIDeleteUrls handler
+	token := getToken(ctx)
+	if token == "" {
+		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован;")
+	}
+
 	return &pb.APIDeleteUrlsResponse{}, nil
 }
 
@@ -159,4 +191,18 @@ func (h *HandlerService) tokenInterceptor(ctx context.Context, req interface{}, 
 		return nil, status.Error(codes.Unauthenticated, "Token is invalid")
 	}
 	return handler(ctx, req)
+}
+
+// getToken - возвращает токен из контекста, если он есть.
+func getToken(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	// получение токена
+	values := md.Get("token")
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
