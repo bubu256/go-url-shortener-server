@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 
 	"github.com/bubu256/go-url-shortener-server/config"
 	"github.com/bubu256/go-url-shortener-server/internal/app/errorapp"
+	"github.com/bubu256/go-url-shortener-server/internal/app/handlers"
 	pb "github.com/bubu256/go-url-shortener-server/internal/app/proto"
 	"github.com/bubu256/go-url-shortener-server/internal/app/schema"
 	"github.com/bubu256/go-url-shortener-server/internal/app/shortener"
@@ -17,24 +19,25 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
 // Структура HandlerService хранит настройки для работы сервера и содержит gRPC методы
 type HandlerService struct {
 	pb.UnimplementedHandlerServiceServer
-	service *shortener.Shortener
-	baseURL string
-	// trustedSubnet *net.IPNet
-	cfg config.CfgServer
+	service       *shortener.Shortener
+	baseURL       string
+	trustedSubnet *net.IPNet
+	cfg           config.CfgServer
 }
 
 // New - возвращает ссылку на новую структуру handlerService, и *grpc.Server с подключенными перехватчиками
 func New(service *shortener.Shortener, cfgServer config.CfgServer) (*HandlerService, *grpc.Server) {
 	newHandlerService := HandlerService{
-		baseURL: cfgServer.BaseURL,
-		// trustedSubnet: ParseSubnetCIDR(cfgServer.TrustedSubnet),
-		cfg: cfgServer,
+		baseURL:       cfgServer.BaseURL,
+		trustedSubnet: handlers.ParseSubnetCIDR(cfgServer.TrustedSubnet),
+		cfg:           cfgServer,
 	}
 	return &newHandlerService, grpc.NewServer(
 		grpc.UnaryInterceptor(newHandlerService.tokenInterceptor),
@@ -48,7 +51,7 @@ func (h *HandlerService) Ping(ctx context.Context, req *pb.PingRequest) (*pb.Pin
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "ошибка подключения к БД; %V", err)
 	}
-	return &pb.PingResponse{}, nil
+	return &pb.PingResponse{Success: true}, nil
 }
 
 // URLtoShort - Принимает полный URL и возвращает короткую ссылку.
@@ -126,24 +129,39 @@ func (h *HandlerService) APIUserAllURLs(ctx context.Context, req *pb.APIUserAllU
 	if token == "" {
 		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован;")
 	}
-
-	return &pb.APIUserAllURLsResponse{}, nil
+	allURLs := h.service.GetAllURLs(token)
+	result := make([]*pb.URLMapping, 0)
+	for key, URL := range allURLs {
+		result = append(result, &pb.URLMapping{CorrelationId: key, OriginalUrl: URL})
+	}
+	return &pb.APIUserAllURLsResponse{Urls: result}, nil
 }
 
-// APIDeleteUrls - принимает запрос на удаление URLs. Удаление возможно только для URLs добавленных пользователем
+// APIDeleteUrls - принимает запрос на удаление URLs. Удаление возможно только для URLs добавленных пользователем.
+// метод только принимает запрос, удаление может произойти позже.
 func (h *HandlerService) APIDeleteUrls(ctx context.Context, req *pb.APIDeleteUrlsRequest) (*pb.APIDeleteUrlsResponse, error) {
 	token := getToken(ctx)
 	if token == "" {
 		return nil, status.Error(codes.Unauthenticated, "пользователь не авторизован;")
 	}
+	go h.service.DeleteBatch(req.Urls, token)
 
-	return &pb.APIDeleteUrlsResponse{}, nil
+	return &pb.APIDeleteUrlsResponse{Success: true}, nil
 }
 
 // APIInternalStats - возвращает статистику сервера
 func (h *HandlerService) APIInternalStats(ctx context.Context, req *pb.APIInternalStatsRequest) (*pb.APIInternalStatsResponse, error) {
-	// TODO: Implement logic for APIInternalStats handler
-	return &pb.APIInternalStatsResponse{}, nil
+	p, _ := peer.FromContext(ctx)
+	remoteAddr := p.Addr.String()
+	if !h.isTrustedSubnet(remoteAddr) {
+		return nil, status.Error(codes.PermissionDenied, "метод не доступен")
+	}
+	// получаем статистику
+	stats, err := h.service.GetStatsStorage()
+	if err != nil {
+		return nil, status.Error(codes.Internal, "ошибка при получении статистики по серверу;")
+	}
+	return &pb.APIInternalStatsResponse{Users: int32(stats.Users), Urls: int32(stats.URLs)}, nil
 }
 
 // TokenHandler - выдает токен пользователю
@@ -191,6 +209,28 @@ func (h *HandlerService) tokenInterceptor(ctx context.Context, req interface{}, 
 		return nil, status.Error(codes.Unauthenticated, "Token is invalid")
 	}
 	return handler(ctx, req)
+}
+
+// isTrustedSubnet - проверяет входит ли IP-адрес в доверительную подсеть сервера
+func (h *HandlerService) isTrustedSubnet(remoteAddr string) bool {
+	if h.trustedSubnet == nil {
+		return false
+	}
+	// Парсим IP-адрес из Request.RemoteAddr
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		log.Println("Error splitting host and port:", err)
+		// return false // возможно строка не содержит порт, проверяем дальше
+		host = remoteAddr
+	}
+	IP := net.ParseIP(host)
+	if IP == nil {
+		log.Println("Error parsing IP address:", err)
+		return false
+	}
+
+	// Проверяем входит ли IP-адрес в доверительную подсеть
+	return h.trustedSubnet.Contains(IP)
 }
 
 // getToken - возвращает токен из контекста, если он есть.
