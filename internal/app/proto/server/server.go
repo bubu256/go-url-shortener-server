@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
 
@@ -66,7 +67,7 @@ func (h *HandlerService) URLtoShort(ctx context.Context, req *pb.URLtoShortReque
 		// если ошибка дубликации урл
 		shortURL, err := h.createLink(errDuplicate.ExistsKey)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "ошибка при сборе короткой ссылки %v; %w", err, errDuplicate)
+			return nil, status.Error(codes.Internal, fmt.Errorf("ошибка при сборе короткой ссылки %v; %w", err, errDuplicate).Error())
 		}
 		return &pb.URLtoShortResponse{ShortUrl: shortURL}, status.Errorf(codes.InvalidArgument, "найден дубликат; %v", errDuplicate)
 	} else if err != nil {
