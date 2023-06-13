@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package proto;
+
+option go_package = "internal/app/proto";
+
+service HandlerService {
+  rpc Ping(PingRequest) returns (PingResponse) {}
+  rpc URLtoShort(URLtoShortRequest) returns (URLtoShortResponse) {}
+  rpc ShortToURL(ShortToURLRequest) returns (ShortToURLResponse) {}
+  rpc APIShortenBatch(APIShortenBatchRequest) returns (APIShortenBatchResponse) {}
+  rpc APIUserAllURLs(APIUserAllURLsRequest) returns (APIUserAllURLsResponse) {}
+  rpc APIDeleteUrls(APIDeleteUrlsRequest) returns (APIDeleteUrlsResponse) {}
+  rpc APIInternalStats(APIInternalStatsRequest) returns (APIInternalStatsResponse) {}
+  rpc TokenHandler(TokenHandlerRequest) returns (TokenHandlerResponse) {}
+}
+
+message PingRequest {
+}
+
+message PingResponse {
+  bool success = 1;
+}
+
+message URLtoShortRequest {
+  string url = 1;
+}
+
+message URLtoShortResponse {
+  string short_url = 1;
+}
+
+message ShortToURLRequest {
+  string short_key = 1;
+}
+
+message ShortToURLResponse {
+  string full_url = 1;
+}
+
+message APIShortenBatchRequest {
+  repeated URLMapping urls = 1;
+}
+
+message URLMapping {
+  string correlation_id = 1;
+  string original_url = 2;
+}
+
+message APIShortenBatchResponse {
+  repeated ShortURLMapping short_urls = 1;
+}
+
+message ShortURLMapping {
+  string correlation_id = 1;
+  string short_url = 2;
+}
+
+message APIShortenResponse {
+  string short_url = 1;
+}
+
+message APIUserAllURLsRequest {
+}
+
+message APIUserAllURLsResponse {
+  repeated URLMapping urls = 1;
+}
+
+message APIDeleteUrlsRequest {
+  repeated string urls = 1;
+}
+
+message APIDeleteUrlsResponse {
+  bool success = 1;
+}
+
+message APIInternalStatsRequest {
+}
+
+message APIInternalStatsResponse {
+  int32 users = 1;
+  int32 urls = 2;
+}
+
+message TokenHandlerRequest {
+  string token = 1;
+}
+
+message TokenHandlerResponse {
+  string token = 1;
+}
